@@ -1,5 +1,4 @@
 {{- if eq .Values.architecture "standalone" }}
-{{- include "valkey.validateArchitecture" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,10 +6,6 @@ metadata:
   namespace: {{ .Release.Namespace | quote }}
   labels:
     {{- include "valkey.standalone.labels" . | nindent 4 }}
-  {{- with (include "valkey.annotations" .) }}
-  annotations:
-    {{- . | nindent 4 }}
-  {{- end }}
 spec:
   replicas: {{ .Values.standalone.replicaCount }}
   selector:
@@ -20,73 +15,29 @@ spec:
     metadata:
       labels:
         {{- include "valkey.standalone.selectorLabels" . | nindent 8 }}
-      {{- with (include "valkey.annotations" .) }}
       annotations:
-        {{- . | nindent 8 }}
         checksum/config: {{ include (print $.Template.BasePath "/standalone-configmap.yaml") . | sha256sum }}
         {{- if .Values.auth.enabled }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- end }}
-        rollme: {{ .Release.Revision | quote }}
-      {{- end }}
     spec:
-      {{- if or .Values.image.pullSecrets .Values.global.imagePullSecrets }}
-      imagePullSecrets:
-        {{- if .Values.image.pullSecrets }}
-        {{- range .Values.image.pullSecrets }}
-        - name: {{ . }}
-        {{- end }}
-        {{- else if .Values.global.imagePullSecrets }}
-        {{- range .Values.global.imagePullSecrets }}
-        - name: {{ . }}
-        {{- end }}
-        {{- end }}
-      {{- end }}
       serviceAccountName: {{ include "valkey.serviceAccountName" . }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- if .Values.sysctls.enabled }}
-      initContainers:
-        - name: init-sysctl
-          image: {{ include "valkey.image" . }}
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command:
-            - /bin/sh
-            - -c
-            - |
-              install_packages procps
-              sysctl -w net.core.somaxconn=65535
-          securityContext:
-            privileged: true
-            runAsUser: 0
-          {{- if .Values.sysctls.resources }}
-          resources: {{- toYaml .Values.sysctls.resources | nindent 12 }}
-          {{- end }}
-      {{- end }}
-      {{- if and .Values.volumePermissions.enabled .Values.standalone.persistence.enabled }}
-        - name: volume-permissions
-          image: {{ .Values.volumePermissions.image.registry }}/{{ .Values.volumePermissions.image.repository }}:{{ .Values.volumePermissions.image.tag }}
-          imagePullPolicy: {{ .Values.volumePermissions.image.pullPolicy }}
-          command:
-            - /bin/bash
-            - -ec
-            - |
-              chown -R {{ .Values.podSecurityContext.runAsUser }}:{{ .Values.podSecurityContext.fsGroup }} /data
-          securityContext:
-            runAsUser: 0
-          {{- if .Values.volumePermissions.resources }}
-          resources: {{- toYaml .Values.volumePermissions.resources | nindent 12 }}
-          {{- end }}
-          volumeMounts:
-            - name: valkey-data
-              mountPath: /data
-      {{- end }}
+        fsGroup: 999
+        runAsGroup: 999
+        runAsUser: 999
       containers:
         - name: valkey
           image: {{ include "valkey.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 999
           command:
             - /bin/bash
           args:
@@ -96,14 +47,14 @@ spec:
               export REDISCLI_AUTH="$VALKEY_PASSWORD"
               {{- end }}
               valkey-server /opt/valkey/etc/valkey.conf
+          {{- if .Values.auth.enabled }}
           env:
-            {{- if .Values.auth.enabled }}
             - name: VALKEY_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ include "valkey.secretName" . }}
                   key: {{ include "valkey.secretPasswordKey" . }}
-            {{- end }}
+          {{- end }}
           ports:
             - name: valkey
               containerPort: 6379
@@ -141,7 +92,8 @@ spec:
                   valkey-cli ping
                   {{- end }}
           {{- if .Values.standalone.resources }}
-          resources: {{- toYaml .Values.standalone.resources | nindent 12 }}
+          resources:
+            {{- toYaml .Values.standalone.resources | nindent 12 }}
           {{- end }}
           volumeMounts:
             - name: valkey-data
@@ -151,52 +103,6 @@ spec:
               subPath: valkey.conf
             - name: tmp
               mountPath: /tmp
-        {{- if .Values.metrics.enabled }}
-        - name: metrics
-          image: {{ include "valkey.metrics.image" . }}
-          imagePullPolicy: {{ .Values.metrics.image.pullPolicy }}
-          env:
-            - name: REDIS_ADDR
-              value: "redis://127.0.0.1:6379"
-            {{- if .Values.auth.enabled }}
-            - name: REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "valkey.secretName" . }}
-                  key: {{ include "valkey.secretPasswordKey" . }}
-            {{- end }}
-          ports:
-            - name: metrics
-              containerPort: 9121
-              protocol: TCP
-          livenessProbe:
-            httpGet:
-              path: /
-              port: metrics
-            initialDelaySeconds: 15
-            timeoutSeconds: 5
-          readinessProbe:
-            httpGet:
-              path: /
-              port: metrics
-            initialDelaySeconds: 5
-            timeoutSeconds: 1
-          {{- if .Values.metrics.resources }}
-          resources: {{- toYaml .Values.metrics.resources | nindent 12 }}
-          {{- end }}
-        {{- end }}
-      {{- with .Values.standalone.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.standalone.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.standalone.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       volumes:
         - name: config
           configMap:
