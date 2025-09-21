@@ -1,29 +1,29 @@
-{{- if eq .Values.architecture "sentinel" }}
+{{- if eq .Values.architecture "standalone" }}
+{{- include "valkey.validateArchitecture" . }}
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
-  name: {{ printf "%s-replica" (include "valkey.fullname" .) }}
+  name: {{ include "valkey.fullname" . }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
-    {{- include "valkey.replica.labels" . | nindent 4 }}
+    {{- include "valkey.standalone.labels" . | nindent 4 }}
   {{- with (include "valkey.annotations" .) }}
   annotations:
     {{- . | nindent 4 }}
   {{- end }}
 spec:
-  serviceName: {{ include "valkey.replica.serviceName" . }}
-  replicas: {{ .Values.replica.replicaCount }}
+  replicas: {{ .Values.standalone.replicaCount }}
   selector:
     matchLabels:
-      {{- include "valkey.replica.selectorLabels" . | nindent 6 }}
+      {{- include "valkey.standalone.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "valkey.replica.selectorLabels" . | nindent 8 }}
+        {{- include "valkey.standalone.selectorLabels" . | nindent 8 }}
       {{- with (include "valkey.annotations" .) }}
       annotations:
         {{- . | nindent 8 }}
-        checksum/config: {{ include (print $.Template.BasePath "/replica-configmap.yaml") . | sha256sum }}
+        checksum/config: {{ include (print $.Template.BasePath "/standalone-configmap.yaml") . | sha256sum }}
         {{- if .Values.auth.enabled }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- end }}
@@ -54,7 +54,7 @@ spec:
           resources: {{- toYaml .Values.sysctls.resources | nindent 12 }}
           {{- end }}
       {{- end }}
-      {{- if and .Values.volumePermissions.enabled .Values.replica.persistence.enabled }}
+      {{- if and .Values.volumePermissions.enabled .Values.standalone.persistence.enabled }}
         - name: volume-permissions
           image: {{ .Values.volumePermissions.image.registry }}/{{ .Values.volumePermissions.image.repository }}:{{ .Values.volumePermissions.image.tag }}
           imagePullPolicy: {{ .Values.volumePermissions.image.pullPolicy }}
@@ -86,7 +86,7 @@ spec:
               {{- if .Values.auth.enabled }}
               export REDISCLI_AUTH="$VALKEY_PASSWORD"
               {{- end }}
-              valkey-server /opt/valkey/etc/valkey.conf --replicaof {{ include "valkey.master.serviceName" . }} 6379
+              valkey-server /opt/valkey/etc/valkey.conf
           env:
             {{- if .Values.auth.enabled }}
             - name: VALKEY_PASSWORD
@@ -131,8 +131,8 @@ spec:
                   {{- else }}
                   valkey-cli ping
                   {{- end }}
-          {{- if .Values.replica.resources }}
-          resources: {{- toYaml .Values.replica.resources | nindent 12 }}
+          {{- if .Values.standalone.resources }}
+          resources: {{- toYaml .Values.standalone.resources | nindent 12 }}
           {{- end }}
           volumeMounts:
             - name: valkey-data
@@ -176,57 +176,30 @@ spec:
           resources: {{- toYaml .Values.metrics.resources | nindent 12 }}
           {{- end }}
         {{- end }}
-      {{- with .Values.replica.nodeSelector }}
+      {{- with .Values.standalone.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.replica.affinity }}
+      {{- with .Values.standalone.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.replica.tolerations }}
+      {{- with .Values.standalone.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       volumes:
         - name: config
           configMap:
-            name: {{ printf "%s-replica" (include "valkey.fullname" .) }}
+            name: {{ include "valkey.fullname" . }}
         - name: tmp
           emptyDir: {}
-  {{- if .Values.replica.persistence.enabled }}
-  volumeClaimTemplates:
-    - metadata:
-        name: valkey-data
-        labels:
-          {{- include "valkey.replica.labels" . | nindent 10 }}
-        {{- with .Values.replica.persistence.annotations }}
-        annotations:
-          {{- toYaml . | nindent 10 }}
-        {{- end }}
-      spec:
-        accessModes:
-          {{- range .Values.replica.persistence.accessModes }}
-          - {{ . | quote }}
-          {{- end }}
-        resources:
-          requests:
-            storage: {{ .Values.replica.persistence.size | quote }}
-        {{- if .Values.replica.persistence.storageClass }}
-        {{- if (eq "-" .Values.replica.persistence.storageClass) }}
-        storageClassName: ""
+        {{- if .Values.standalone.persistence.enabled }}
+        - name: valkey-data
+          persistentVolumeClaim:
+            claimName: {{ include "valkey.fullname" . }}
         {{- else }}
-        storageClassName: {{ .Values.replica.persistence.storageClass | quote }}
-        {{- end }}
-        {{- else if .Values.global.storageClass }}
-        storageClassName: {{ .Values.global.storageClass | quote }}
-        {{- end }}
-        {{- with .Values.replica.persistence.selector }}
-        selector:
-          {{- toYaml . | nindent 10 }}
-        {{- end }}
-  {{- else }}
         - name: valkey-data
           emptyDir: {}
-  {{- end }}
+        {{- end }}
 {{- end }}

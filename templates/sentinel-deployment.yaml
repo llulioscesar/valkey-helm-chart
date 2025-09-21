@@ -28,17 +28,9 @@ spec:
         {{- end }}
       {{- end }}
     spec:
-      {{- if or .Values.image.pullSecrets .Values.global.imagePullSecrets }}
+      {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
-        {{- if .Values.image.pullSecrets }}
-        {{- range .Values.image.pullSecrets }}
-        - name: {{ . }}
-        {{- end }}
-        {{- else if .Values.global.imagePullSecrets }}
-        {{- range .Values.global.imagePullSecrets }}
-        - name: {{ . }}
-        {{- end }}
-        {{- end }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "valkey.serviceAccountName" . }}
       securityContext:
