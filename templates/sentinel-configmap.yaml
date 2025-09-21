@@ -12,5 +12,5 @@ metadata:
   {{- end }}
 data:
   sentinel.conf: |
-    {{- .Values.sentinel.configuration | nindent 4 }}
+{{- .Values.sentinel.configuration | nindent 4 }}
 {{- end }}

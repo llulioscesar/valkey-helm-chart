@@ -12,11 +12,11 @@ metadata:
   {{- end }}
 data:
   valkey.conf: |
-    {{- .Values.replica.configuration | nindent 4 }}
-    {{- if .Values.auth.enabled }}
+{{- .Values.replica.configuration | nindent 4 }}
+{{- if .Values.auth.enabled }}
 
     # Authentication
     requirepass ${VALKEY_PASSWORD}
     masterauth ${VALKEY_PASSWORD}
-    {{- end }}
+{{- end }}
 {{- end }}
