@@ -12,8 +12,6 @@ jobs:
   release:
     permissions:
       contents: write
-      pages: write
-      id-token: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -44,14 +42,11 @@ jobs:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           CR_SKIP_EXISTING: true
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: .cr-release-packages
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Trigger Pages Workflow
+        if: github.ref == 'refs/heads/main'
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/pages.yml/dispatches \
+            -d '{"ref":"main"}'

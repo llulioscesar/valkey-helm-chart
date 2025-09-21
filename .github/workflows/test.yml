@@ -1,0 +1,46 @@
+name: Test Chart
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.12.1
+
+      - name: Lint chart
+        run: |
+          helm lint .
+          echo "✅ Chart lint passed"
+
+      - name: Test chart templates
+        run: |
+          echo "Testing standalone mode..."
+          helm template test . --set architecture=standalone > /dev/null
+          echo "✅ Standalone template generation passed"
+
+          echo "Testing sentinel mode..."
+          helm template test . --set architecture=sentinel --set auth.enabled=true --set auth.password=test > /dev/null
+          echo "✅ Sentinel template generation passed"
+
+      - name: Package chart
+        run: |
+          helm package .
+          ls -la *.tgz
+          echo "✅ Chart packaging passed"
+
+      - name: Test installation (dry-run)
+        run: |
+          helm install test-valkey . --dry-run --debug > /dev/null
+          echo "✅ Dry-run installation passed"

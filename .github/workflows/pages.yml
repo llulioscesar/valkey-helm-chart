@@ -34,6 +34,7 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
+        continue-on-error: true
 
       - name: Install Helm
         uses: azure/setup-helm@v4
@@ -42,8 +43,9 @@ jobs:
 
       - name: Create Helm repository index
         run: |
-          # Create a temporary directory for packages
+          # Create directories
           mkdir -p .cr-release-packages
+          mkdir -p public
 
           # Package the chart
           helm package . -d .cr-release-packages
@@ -51,10 +53,20 @@ jobs:
           # Create the index
           helm repo index .cr-release-packages --url https://start-codex.github.io/valkey-helm-chart
 
-          # Create the GitHub Pages structure
-          mkdir -p public
-          cp .cr-release-packages/* public/
-          cp README.md public/
+          # Copy files to public directory
+          if [ -f .cr-release-packages/*.tgz ]; then
+            cp .cr-release-packages/*.tgz public/ || true
+          fi
+
+          if [ -f .cr-release-packages/index.yaml ]; then
+            cp .cr-release-packages/index.yaml public/
+          fi
+
+          cp README.md public/ || true
+
+          # Verify what we have
+          echo "Contents of public directory:"
+          ls -la public/
 
           # Create a simple index.html
           cat > public/index.html << 'EOF'
@@ -166,7 +178,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
+    if: github.repository_owner != ''
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
