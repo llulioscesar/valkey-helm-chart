@@ -12,7 +12,7 @@ metadata:
   {{- end }}
 data:
   valkey.conf: |
-{{- .Values.master.configuration | nindent 4 }}
+{{ .Values.master.configuration | indent 4 }}
 {{- if .Values.auth.enabled }}
 
     # Authentication
