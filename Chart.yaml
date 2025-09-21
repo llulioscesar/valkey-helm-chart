@@ -2,7 +2,7 @@ apiVersion: v2
 name: valkey
 description: A Helm chart for Valkey - A high-performance data structure server compatible with Redis
 type: application
-version: 0.1.4
+version: 0.1.5
 appVersion: "8.1.3"
 keywords:
   - valkey

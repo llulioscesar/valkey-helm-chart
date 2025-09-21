@@ -27,18 +27,19 @@ spec:
         {{- if .Values.auth.enabled }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- end }}
-        rollme: {{ randAlphaNum 5 | quote }}
+        rollme: {{ .Release.Revision | quote }}
       {{- end }}
     spec:
-      {{- if .Values.image.pullSecrets }}
+      {{- if or .Values.image.pullSecrets .Values.global.imagePullSecrets }}
       imagePullSecrets:
+        {{- if .Values.image.pullSecrets }}
         {{- range .Values.image.pullSecrets }}
         - name: {{ . }}
         {{- end }}
-      {{- else if .Values.global.imagePullSecrets }}
-      imagePullSecrets:
+        {{- else if .Values.global.imagePullSecrets }}
         {{- range .Values.global.imagePullSecrets }}
         - name: {{ . }}
+        {{- end }}
         {{- end }}
       {{- end }}
       serviceAccountName: {{ include "valkey.serviceAccountName" . }}
