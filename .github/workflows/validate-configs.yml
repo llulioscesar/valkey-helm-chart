@@ -1,0 +1,109 @@
+name: Validate Chart Configurations
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  validate-configs:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        config:
+          - name: "standalone-no-auth"
+            values: |
+              architecture: standalone
+              auth:
+                enabled: false
+          - name: "standalone-with-auth"
+            values: |
+              architecture: standalone
+              auth:
+                enabled: true
+                password: "testpassword"
+          - name: "standalone-existing-secret"
+            values: |
+              architecture: standalone
+              auth:
+                enabled: true
+                existingSecret: "redis-secret"
+          - name: "standalone-with-persistence"
+            values: |
+              architecture: standalone
+              standalone:
+                persistence:
+                  enabled: true
+                  storageClass: "longhorn-simple"
+                  size: "10Gi"
+          - name: "sentinel-mode"
+            values: |
+              architecture: sentinel
+              auth:
+                enabled: true
+                password: "testpassword"
+              sentinel:
+                replicaCount: 3
+          - name: "with-metrics"
+            values: |
+              architecture: standalone
+              metrics:
+                enabled: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.12.1
+
+      - name: Create test values file
+        run: |
+          cat > test-values-${{ matrix.config.name }}.yaml << 'EOF'
+          ${{ matrix.config.values }}
+          EOF
+
+      - name: Lint chart with ${{ matrix.config.name }} config
+        run: |
+          helm lint . -f test-values-${{ matrix.config.name }}.yaml
+          echo "✅ Lint passed for ${{ matrix.config.name }}"
+
+      - name: Test template generation for ${{ matrix.config.name }}
+        run: |
+          helm template test-${{ matrix.config.name }} . -f test-values-${{ matrix.config.name }}.yaml > output-${{ matrix.config.name }}.yaml
+          echo "✅ Template generation passed for ${{ matrix.config.name }}"
+
+      - name: Validate generated manifests
+        run: |
+          # Check that required resources are generated
+          if [ "${{ matrix.config.name }}" = "standalone-no-auth" ] || [ "${{ matrix.config.name }}" = "standalone-with-auth" ] || [ "${{ matrix.config.name }}" = "standalone-existing-secret" ] || [ "${{ matrix.config.name }}" = "standalone-with-persistence" ] || [ "${{ matrix.config.name }}" = "with-metrics" ]; then
+            grep -q "kind: Deployment" output-${{ matrix.config.name }}.yaml || (echo "❌ Deployment not found" && exit 1)
+            grep -q "kind: Service" output-${{ matrix.config.name }}.yaml || (echo "❌ Service not found" && exit 1)
+            grep -q "kind: ConfigMap" output-${{ matrix.config.name }}.yaml || (echo "❌ ConfigMap not found" && exit 1)
+          fi
+
+          if [ "${{ matrix.config.name }}" = "sentinel-mode" ]; then
+            grep -q "kind: StatefulSet" output-${{ matrix.config.name }}.yaml || (echo "❌ StatefulSet not found" && exit 1)
+            # Should have master, replica, and sentinel services
+            SERVICE_COUNT=$(grep -c "kind: Service" output-${{ matrix.config.name }}.yaml)
+            if [ "$SERVICE_COUNT" -lt 3 ]; then
+              echo "❌ Expected at least 3 services for sentinel mode, found $SERVICE_COUNT"
+              exit 1
+            fi
+          fi
+
+          if [[ "${{ matrix.config.name }}" == *"persistence"* ]]; then
+            grep -q "kind: PersistentVolumeClaim" output-${{ matrix.config.name }}.yaml || (echo "❌ PVC not found when persistence enabled" && exit 1)
+          fi
+
+          echo "✅ Manifest validation passed for ${{ matrix.config.name }}"
+
+      - name: Upload generated manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifests-${{ matrix.config.name }}
+          path: output-${{ matrix.config.name }}.yaml
