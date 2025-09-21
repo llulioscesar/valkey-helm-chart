@@ -215,20 +215,6 @@ metrics:
     loadBalancerIP: ""
     loadBalancerSourceRanges: []
     clusterIP: ""
-  serviceMonitor:
-    enabled: false
-    namespace: ""
-    interval: 30s
-    scrapeTimeout: ""
-    labels: {}
-    honorLabels: false
-    relabelings: []
-    metricRelabelings: []
-  prometheusRule:
-    enabled: false
-    namespace: ""
-    labels: {}
-    rules: []
 
 # Init containers for volume permissions
 volumePermissions:
@@ -262,19 +248,8 @@ tls:
 # Extra resources to deploy
 extraDeploy: []
 
-# External service configuration
-service:
-  external:
-    enabled: false
-    type: LoadBalancer
-    port: 6379
-    nodePort: ""
-    loadBalancerIP: ""
-    loadBalancerSourceRanges: []
-    clusterIP: ""
-    annotations: {}
-    sessionAffinity: None
-    sessionAffinityConfig: {}
+# External service configuration (can be configured via service type)
+# Use standalone.service.type: LoadBalancer for external access
 
 # Service Binding configuration
 serviceBinding:
