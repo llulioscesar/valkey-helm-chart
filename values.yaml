@@ -101,7 +101,7 @@ standalone:
     annotations: {}
 
   # Configuration
-  configuration: |
+  configuration: |-
     # Valkey configuration
     bind 0.0.0.0
     port 6379
@@ -162,7 +162,7 @@ sentinel:
     annotations: {}
 
   # Configuration
-  configuration: |
+  configuration: |-
     # Sentinel configuration
     bind 0.0.0.0
     port 26379
@@ -209,7 +209,7 @@ master:
     annotations: {}
 
   # Configuration
-  configuration: |
+  configuration: |-
     # Valkey master configuration
     bind 0.0.0.0
     port 6379
@@ -267,7 +267,7 @@ replica:
     annotations: {}
 
   # Configuration
-  configuration: |
+  configuration: |-
     # Valkey replica configuration
     bind 0.0.0.0
     port 6379
