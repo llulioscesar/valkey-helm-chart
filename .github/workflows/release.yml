@@ -2,11 +2,6 @@ name: Release Charts
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - 'Chart.yaml'
 
 jobs:
   release:
