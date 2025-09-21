@@ -12,7 +12,7 @@ metadata:
   {{- end }}
 spec:
   serviceName: {{ include "valkey.master.serviceName" . }}
-  replicas: {{ .Values.master.replicaCount }}
+  replicas: {{ if eq .Values.architecture "sentinel" }}{{ .Values.master.replicaCount }}{{ else }}{{ .Values.standalone.replicaCount }}{{ end }}
   selector:
     matchLabels:
       {{- include "valkey.master.selectorLabels" . | nindent 6 }}
@@ -23,7 +23,7 @@ spec:
       {{- with (include "valkey.annotations" .) }}
       annotations:
         {{- . | nindent 8 }}
-        checksum/config: {{ include (print $.Template.BasePath "/master/configmap.yaml") . | sha256sum }}
+        checksum/config: {{ if eq .Values.architecture "sentinel" }}{{ include (print $.Template.BasePath "/master/configmap.yaml") . | sha256sum }}{{ else }}{{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}{{ end }}
         {{- if .Values.auth.enabled }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- end }}
@@ -54,7 +54,7 @@ spec:
           resources: {{- toYaml .Values.sysctls.resources | nindent 12 }}
           {{- end }}
       {{- end }}
-      {{- if and .Values.volumePermissions.enabled .Values.master.persistence.enabled }}
+      {{- if and .Values.volumePermissions.enabled (or (and (eq .Values.architecture "sentinel") .Values.master.persistence.enabled) (and (ne .Values.architecture "sentinel") .Values.standalone.persistence.enabled)) }}
         - name: volume-permissions
           image: {{ .Values.volumePermissions.image.registry }}/{{ .Values.volumePermissions.image.repository }}:{{ .Values.volumePermissions.image.tag }}
           imagePullPolicy: {{ .Values.volumePermissions.image.pullPolicy }}
@@ -131,8 +131,14 @@ spec:
                   {{- else }}
                   valkey-cli ping
                   {{- end }}
+          {{- if eq .Values.architecture "sentinel" }}
           {{- if .Values.master.resources }}
           resources: {{- toYaml .Values.master.resources | nindent 12 }}
+          {{- end }}
+          {{- else }}
+          {{- if .Values.standalone.resources }}
+          resources: {{- toYaml .Values.standalone.resources | nindent 12 }}
+          {{- end }}
           {{- end }}
           volumeMounts:
             - name: valkey-data
@@ -176,6 +182,7 @@ spec:
           resources: {{- toYaml .Values.metrics.resources | nindent 12 }}
           {{- end }}
         {{- end }}
+      {{- if eq .Values.architecture "sentinel" }}
       {{- with .Values.master.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -188,30 +195,58 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- else }}
+      {{- with .Values.standalone.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.standalone.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.standalone.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
       volumes:
         - name: config
           configMap:
-            name: {{ printf "%s-master" (include "valkey.fullname" .) }}
+            name: {{ if eq .Values.architecture "sentinel" }}{{ printf "%s-master" (include "valkey.fullname" .) }}{{ else }}{{ include "valkey.fullname" . }}{{ end }}
         - name: tmp
           emptyDir: {}
-  {{- if .Values.master.persistence.enabled }}
+  {{- if or (and (eq .Values.architecture "sentinel") .Values.master.persistence.enabled) (and (ne .Values.architecture "sentinel") .Values.standalone.persistence.enabled) }}
   volumeClaimTemplates:
     - metadata:
         name: valkey-data
         labels:
           {{- include "valkey.master.labels" . | nindent 10 }}
+        {{- if eq .Values.architecture "sentinel" }}
         {{- with .Values.master.persistence.annotations }}
         annotations:
           {{- toYaml . | nindent 10 }}
         {{- end }}
+        {{- else }}
+        {{- with .Values.standalone.persistence.annotations }}
+        annotations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- end }}
       spec:
         accessModes:
+          {{- if eq .Values.architecture "sentinel" }}
           {{- range .Values.master.persistence.accessModes }}
           - {{ . | quote }}
           {{- end }}
+          {{- else }}
+          {{- range .Values.standalone.persistence.accessModes }}
+          - {{ . | quote }}
+          {{- end }}
+          {{- end }}
         resources:
           requests:
-            storage: {{ .Values.master.persistence.size | quote }}
+            storage: {{ if eq .Values.architecture "sentinel" }}{{ .Values.master.persistence.size | quote }}{{ else }}{{ .Values.standalone.persistence.size | quote }}{{ end }}
+        {{- if eq .Values.architecture "sentinel" }}
         {{- if .Values.master.persistence.storageClass }}
         {{- if (eq "-" .Values.master.persistence.storageClass) }}
         storageClassName: ""
@@ -224,6 +259,21 @@ spec:
         {{- with .Values.master.persistence.selector }}
         selector:
           {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- else }}
+        {{- if .Values.standalone.persistence.storageClass }}
+        {{- if (eq "-" .Values.standalone.persistence.storageClass) }}
+        storageClassName: ""
+        {{- else }}
+        storageClassName: {{ .Values.standalone.persistence.storageClass | quote }}
+        {{- end }}
+        {{- else if .Values.global.storageClass }}
+        storageClassName: {{ .Values.global.storageClass | quote }}
+        {{- end }}
+        {{- with .Values.standalone.persistence.selector }}
+        selector:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         {{- end }}
   {{- else }}
         - name: valkey-data
