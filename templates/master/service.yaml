@@ -1,12 +1,12 @@
-{{- if eq .Values.architecture "standalone" }}
+{{- if or (eq .Values.architecture "standalone") (eq .Values.architecture "sentinel") }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "valkey.fullname" . }}
+  name: {{ include "valkey.master.serviceName" . }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
-    {{- include "valkey.standalone.labels" . | nindent 4 }}
-  {{- with .Values.standalone.service.annotations }}
+    {{- include "valkey.master.labels" . | nindent 4 }}
+  {{- with .Values.master.service.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
@@ -14,10 +14,10 @@ metadata:
     {{- . | nindent 4 }}
   {{- end }}
 spec:
-  type: {{ .Values.standalone.service.type }}
+  type: {{ .Values.master.service.type }}
   ports:
-    - port: {{ .Values.standalone.service.port }}
-      targetPort: {{ .Values.standalone.service.targetPort }}
+    - port: {{ .Values.master.service.port }}
+      targetPort: {{ .Values.master.service.targetPort }}
       protocol: TCP
       name: valkey
     {{- if .Values.metrics.enabled }}
@@ -27,5 +27,5 @@ spec:
       name: metrics
     {{- end }}
   selector:
-    {{- include "valkey.standalone.selectorLabels" . | nindent 4 }}
+    {{- include "valkey.master.selectorLabels" . | nindent 4 }}
 {{- end }}

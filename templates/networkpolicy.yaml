@@ -1,0 +1,63 @@
+{{- if include "valkey.networkPolicy.enabled" . }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "valkey.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.labels" . | nindent 4 }}
+  {{- with (include "valkey.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  policyTypes:
+    - Ingress
+    - Egress
+  podSelector:
+    matchLabels:
+      {{- include "valkey.selectorLabels" . | nindent 6 }}
+  ingress:
+    - ports:
+        {{- if eq .Values.architecture "standalone" }}
+        - port: {{ .Values.standalone.service.port }}
+          protocol: TCP
+        {{- else }}
+        - port: {{ .Values.master.service.port }}
+          protocol: TCP
+        {{- if .Values.replica.replicaCount | int }}
+        - port: {{ .Values.replica.service.port }}
+          protocol: TCP
+        {{- end }}
+        {{- if .Values.sentinel.enabled }}
+        - port: {{ .Values.sentinel.service.sentinelPort }}
+          protocol: TCP
+        {{- end }}
+        {{- end }}
+        {{- if .Values.metrics.enabled }}
+        - port: {{ .Values.metrics.service.port }}
+          protocol: TCP
+        {{- end }}
+      {{- if not .Values.networkPolicy.allowExternal }}
+      from:
+        - podSelector:
+            matchLabels:
+              {{ include "valkey.fullname" . }}-client: "true"
+        {{- if .Values.networkPolicy.ingressNSMatchLabels }}
+        - namespaceSelector:
+            matchLabels:
+              {{- range $key, $value := .Values.networkPolicy.ingressNSMatchLabels }}
+              {{ $key | quote }}: {{ $value | quote }}
+              {{- end }}
+          {{- if .Values.networkPolicy.ingressNSPodMatchLabels }}
+          podSelector:
+            matchLabels:
+              {{- range $key, $value := .Values.networkPolicy.ingressNSPodMatchLabels }}
+              {{ $key | quote }}: {{ $value | quote }}
+              {{- end }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
+  egress:
+    - {}
+{{- end }}

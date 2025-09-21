@@ -1,0 +1,250 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "valkey.fullname" . }}-health
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.labels" . | nindent 4 }}
+  {{- with (include "valkey.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+data:
+  ping_readiness_local.sh: |-
+    #!/bin/bash
+
+    [[ -f $VALKEY_PASSWORD_FILE ]] && export VALKEY_PASSWORD="$(< "${VALKEY_PASSWORD_FILE}")"
+    [[ -n "$VALKEY_PASSWORD" ]] && export REDISCLI_AUTH="$VALKEY_PASSWORD"
+
+    response=$(
+      timeout -s 15 $1 \
+      valkey-cli \
+        -h localhost \
+        {{- if .Values.tls.enabled }}
+        -p $VALKEY_TLS_PORT \
+        --tls \
+        {{- if .Values.tls.certCAFilename }}
+        --cacert {{ printf "%s/%s" .Values.tls.certificatesMountPath .Values.tls.certCAFilename }} \
+        {{- end }}
+        {{- if .Values.tls.authClients }}
+        --cert {{ printf "%s/%s" .Values.tls.certificatesMountPath .Values.tls.certFilename }} \
+        --key {{ printf "%s/%s" .Values.tls.certificatesMountPath .Values.tls.certKeyFilename }} \
+        {{- end }}
+        {{- else }}
+        -p $VALKEY_PORT \
+        {{- end }}
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    responseFirstWord=$(echo $response | head -n1 | awk '{print $1;}')
+    if [ "$response" != "PONG" ] && [ "$responseFirstWord" != "LOADING" ] && [ "$responseFirstWord" != "MASTERDOWN" ]; then
+      echo "$response"
+      exit 1
+    fi
+
+  ping_liveness_local.sh: |-
+    #!/bin/bash
+
+    [[ -f $VALKEY_PASSWORD_FILE ]] && export VALKEY_PASSWORD="$(< "${VALKEY_PASSWORD_FILE}")"
+    [[ -n "$VALKEY_PASSWORD" ]] && export REDISCLI_AUTH="$VALKEY_PASSWORD"
+
+    response=$(
+      timeout -s 15 $1 \
+      valkey-cli \
+        -h localhost \
+        {{- if .Values.tls.enabled }}
+        -p $VALKEY_TLS_PORT \
+        --tls \
+        {{- if .Values.tls.certCAFilename }}
+        --cacert {{ printf "%s/%s" .Values.tls.certificatesMountPath .Values.tls.certCAFilename }} \
+        {{- end }}
+        {{- if .Values.tls.authClients }}
+        --cert {{ printf "%s/%s" .Values.tls.certificatesMountPath .Values.tls.certFilename }} \
+        --key {{ printf "%s/%s" .Values.tls.certificatesMountPath .Values.tls.certKeyFilename }} \
+        {{- end }}
+        {{- else }}
+        -p $VALKEY_PORT \
+        {{- end }}
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    if [ "$response" != "PONG" ]; then
+      echo "$response"
+      exit 1
+    fi
+
+  ping_readiness_master.sh: |-
+    #!/bin/bash
+
+    [[ -f $VALKEY_MASTER_PASSWORD_FILE ]] && export VALKEY_MASTER_PASSWORD="$(< "${VALKEY_MASTER_PASSWORD_FILE}")"
+    [[ -n "$VALKEY_MASTER_PASSWORD" ]] && export REDISCLI_AUTH="$VALKEY_MASTER_PASSWORD"
+
+    response=$(
+      timeout -s 15 $1 \
+      valkey-cli \
+        -h $VALKEY_MASTER_HOST \
+        {{- if .Values.tls.enabled }}
+        -p $VALKEY_MASTER_PORT_NUMBER \
+        --tls \
+        {{- if .Values.tls.certCAFilename }}
+        --cacert {{ printf "%s/%s" .Values.tls.certificatesMountPath .Values.tls.certCAFilename }} \
+        {{- end }}
+        {{- if .Values.tls.authClients }}
+        --cert {{ printf "%s/%s" .Values.tls.certificatesMountPath .Values.tls.certFilename }} \
+        --key {{ printf "%s/%s" .Values.tls.certificatesMountPath .Values.tls.certKeyFilename }} \
+        {{- end }}
+        {{- else }}
+        -p $VALKEY_MASTER_PORT_NUMBER \
+        {{- end }}
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    responseFirstWord=$(echo $response | head -n1 | awk '{print $1;}')
+    if [ "$response" != "PONG" ] && [ "$responseFirstWord" != "LOADING" ]; then
+      echo "$response"
+      exit 1
+    fi
+
+  ping_liveness_master.sh: |-
+    #!/bin/bash
+
+    [[ -f $VALKEY_MASTER_PASSWORD_FILE ]] && export VALKEY_MASTER_PASSWORD="$(< "${VALKEY_MASTER_PASSWORD_FILE}")"
+    [[ -n "$VALKEY_MASTER_PASSWORD" ]] && export REDISCLI_AUTH="$VALKEY_MASTER_PASSWORD"
+
+    response=$(
+      timeout -s 15 $1 \
+      valkey-cli \
+        -h $VALKEY_MASTER_HOST \
+        {{- if .Values.tls.enabled }}
+        -p $VALKEY_MASTER_PORT_NUMBER \
+        --tls \
+        {{- if .Values.tls.certCAFilename }}
+        --cacert {{ printf "%s/%s" .Values.tls.certificatesMountPath .Values.tls.certCAFilename }} \
+        {{- end }}
+        {{- if .Values.tls.authClients }}
+        --cert {{ printf "%s/%s" .Values.tls.certificatesMountPath .Values.tls.certFilename }} \
+        --key {{ printf "%s/%s" .Values.tls.certificatesMountPath .Values.tls.certKeyFilename }} \
+        {{- end }}
+        {{- else }}
+        -p $VALKEY_MASTER_PORT_NUMBER \
+        {{- end }}
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    if [ "$response" != "PONG" ]; then
+      echo "$response"
+      exit 1
+    fi
+
+  ping_readiness_local_and_master.sh: |-
+    #!/bin/bash
+
+    script_dir="$(dirname "$0")"
+    exit_status=0
+
+    "$script_dir/ping_readiness_local.sh" $1 || exit_status=$?
+    "$script_dir/ping_readiness_master.sh" $1 || exit_status=$?
+
+    exit $exit_status
+
+  ping_liveness_local_and_master.sh: |-
+    #!/bin/bash
+
+    script_dir="$(dirname "$0")"
+    exit_status=0
+
+    "$script_dir/ping_liveness_local.sh" $1 || exit_status=$?
+    "$script_dir/ping_liveness_master.sh" $1 || exit_status=$?
+
+    exit $exit_status
+
+{{- if eq .Values.architecture "sentinel" }}
+  ping_sentinel.sh: |-
+    #!/bin/bash
+
+    [[ -f $VALKEY_PASSWORD_FILE ]] && export VALKEY_PASSWORD="$(< "${VALKEY_PASSWORD_FILE}")"
+    [[ -n "$VALKEY_PASSWORD" ]] && export REDISCLI_AUTH="$VALKEY_PASSWORD"
+
+    response=$(
+      timeout -s 15 $1 \
+      valkey-cli \
+        -h localhost \
+        -p $VALKEY_SENTINEL_PORT \
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    if [ "$response" != "PONG" ]; then
+      echo "$response"
+      exit 1
+    fi
+
+  parse_sentinels.awk: |-
+    /ip/ { ip = $2 }
+    /port/ { port = $2 }
+    /runid/ { runid = $2; print "\""ip":"port"\"" }
+{{- end }}
+
+  check_master.sh: |-
+    #!/bin/bash
+
+    [[ -f $VALKEY_PASSWORD_FILE ]] && export VALKEY_PASSWORD="$(< "${VALKEY_PASSWORD_FILE}")"
+    [[ -n "$VALKEY_PASSWORD" ]] && export REDISCLI_AUTH="$VALKEY_PASSWORD"
+
+    role=$(
+      timeout -s 15 $1 \
+      valkey-cli \
+        -h localhost \
+        -p $VALKEY_PORT \
+        info replication | grep "role:master"
+    )
+    if [[ -z "$role" ]]; then
+      echo "Not master"
+      exit 1
+    fi
+
+  check_replica.sh: |-
+    #!/bin/bash
+
+    [[ -f $VALKEY_PASSWORD_FILE ]] && export VALKEY_PASSWORD="$(< "${VALKEY_PASSWORD_FILE}")"
+    [[ -n "$VALKEY_PASSWORD" ]] && export REDISCLI_AUTH="$VALKEY_PASSWORD"
+
+    # Check if replica
+    role=$(
+      timeout -s 15 $1 \
+      valkey-cli \
+        -h localhost \
+        -p $VALKEY_PORT \
+        info replication | grep "role:slave"
+    )
+    if [[ -z "$role" ]]; then
+      echo "Not replica"
+      exit 1
+    fi
+
+    # Check master connection
+    master_link=$(
+      timeout -s 15 $1 \
+      valkey-cli \
+        -h localhost \
+        -p $VALKEY_PORT \
+        info replication | grep "master_link_status:up"
+    )
+    if [[ -z "$master_link" ]]; then
+      echo "Master link is down"
+      exit 1
+    fi
