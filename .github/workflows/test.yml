@@ -40,7 +40,21 @@ jobs:
           ls -la *.tgz
           echo "✅ Chart packaging passed"
 
-      - name: Test installation (dry-run)
+      - name: Test installation (template only)
         run: |
-          helm install test-valkey . --dry-run --debug > /dev/null
-          echo "✅ Dry-run installation passed"
+          echo "Testing template generation with default values..."
+          helm template test-valkey . > /dev/null
+          echo "✅ Template generation with default values passed"
+
+          echo "Testing template generation with custom values..."
+          cat > test-values.yaml << 'EOF'
+          architecture: standalone
+          auth:
+            enabled: true
+            password: "testpassword"
+          standalone:
+            persistence:
+              storageClass: "standard"
+          EOF
+          helm template test-valkey . -f test-values.yaml > /dev/null
+          echo "✅ Template generation with custom values passed"
