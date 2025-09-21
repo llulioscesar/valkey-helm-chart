@@ -1,0 +1,172 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Chart.yaml'
+      - 'README.md'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # Build job
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.12.1
+
+      - name: Create Helm repository index
+        run: |
+          # Create a temporary directory for packages
+          mkdir -p .cr-release-packages
+
+          # Package the chart
+          helm package . -d .cr-release-packages
+
+          # Create the index
+          helm repo index .cr-release-packages --url https://start-codex.github.io/valkey-helm-chart
+
+          # Create the GitHub Pages structure
+          mkdir -p public
+          cp .cr-release-packages/* public/
+          cp README.md public/
+
+          # Create a simple index.html
+          cat > public/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Valkey Helm Chart Repository</title>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <style>
+                  body {
+                      font-family: Arial, sans-serif;
+                      max-width: 800px;
+                      margin: 40px auto;
+                      padding: 20px;
+                      line-height: 1.6;
+                  }
+                  .header {
+                      text-align: center;
+                      margin-bottom: 40px;
+                      border-bottom: 2px solid #eee;
+                      padding-bottom: 20px;
+                  }
+                  .code {
+                      background: #f4f4f4;
+                      padding: 15px;
+                      border-radius: 5px;
+                      font-family: 'Courier New', monospace;
+                      margin: 10px 0;
+                  }
+                  .section {
+                      margin: 30px 0;
+                  }
+                  h1 { color: #2c5aa0; }
+                  h2 { color: #34495e; }
+                  .logo {
+                      width: 80px;
+                      height: 80px;
+                      margin: 0 auto 20px;
+                      background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+                      border-radius: 15px;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      color: white;
+                      font-size: 24px;
+                      font-weight: bold;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="header">
+                  <div class="logo">VK</div>
+                  <h1>Valkey Helm Chart Repository</h1>
+                  <p>Official Helm chart for Valkey - A high-performance data structure server</p>
+              </div>
+
+              <div class="section">
+                  <h2>🚀 Quick Start</h2>
+                  <p>Add this repository to your Helm:</p>
+                  <div class="code">helm repo add valkey https://start-codex.github.io/valkey-helm-chart<br>helm repo update</div>
+
+                  <p>Install Valkey:</p>
+                  <div class="code">helm install my-valkey valkey/valkey</div>
+              </div>
+
+              <div class="section">
+                  <h2>📦 Available Charts</h2>
+                  <ul>
+                      <li><strong>valkey</strong> - Valkey server with standalone and sentinel modes</li>
+                  </ul>
+              </div>
+
+              <div class="section">
+                  <h2>🔧 Configuration</h2>
+                  <p>The chart supports both standalone and sentinel architectures:</p>
+                  <div class="code"># Standalone mode<br>helm install valkey valkey/valkey<br><br># Sentinel mode<br>helm install valkey valkey/valkey --set architecture=sentinel</div>
+              </div>
+
+              <div class="section">
+                  <h2>📚 Documentation</h2>
+                  <p>For detailed configuration options and examples, visit:</p>
+                  <ul>
+                      <li><a href="https://github.com/start-codex/valkey-helm-chart">GitHub Repository</a></li>
+                      <li><a href="https://valkey.io/">Valkey Official Website</a></li>
+                  </ul>
+              </div>
+
+              <div class="section">
+                  <h2>📁 Repository Files</h2>
+                  <ul>
+                      <li><a href="index.yaml">index.yaml</a> - Helm repository index</li>
+                      <li><a href="README.md">README.md</a> - Chart documentation</li>
+                  </ul>
+              </div>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  # Deployment job
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

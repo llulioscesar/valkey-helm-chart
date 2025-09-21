@@ -1,0 +1,22 @@
+{{- if eq .Values.architecture "sentinel" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-master" (include "valkey.fullname" .) }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.master.labels" . | nindent 4 }}
+  {{- with (include "valkey.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+data:
+  valkey.conf: |
+    {{- .Values.master.configuration | nindent 4 }}
+    {{- if .Values.auth.enabled }}
+
+    # Authentication
+    requirepass ${VALKEY_PASSWORD}
+    masterauth ${VALKEY_PASSWORD}
+    {{- end }}
+{{- end }}
