@@ -1,0 +1,320 @@
+{{- if eq .Values.architecture "sentinel" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ printf "%s-replica" (include "valkey.fullname" .) }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.replica.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.replica.replicaCount }}
+  serviceName: {{ include "valkey.headless.serviceName" . }}
+  selector:
+    matchLabels:
+      {{- include "valkey.replica.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "valkey.replica.labels" . | nindent 8 }}
+      annotations:
+        {{- if (include "valkey.createConfigmap" .) }}
+        checksum/configmap: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- end }}
+        checksum/health: {{ include (print $.Template.BasePath "/health-configmap.yaml") . | sha256sum }}
+        {{- with .Values.replica.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.commonAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- if .Values.replica.hostNetwork }}
+      hostNetwork: {{ .Values.replica.hostNetwork }}
+      {{- end }}
+      {{- if .Values.replica.dnsPolicy }}
+      dnsPolicy: {{ .Values.replica.dnsPolicy }}
+      {{- end }}
+      serviceAccountName: {{ include "valkey.replica.serviceAccountName" . }}
+      {{- if .Values.replica.priorityClassName }}
+      priorityClassName: {{ .Values.replica.priorityClassName | quote }}
+      {{- end }}
+      {{- if .Values.replica.affinity }}
+      affinity: {{- include "valkey.replica.affinity" . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.replica.nodeSelector }}
+      nodeSelector: {{- toYaml .Values.replica.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.replica.tolerations }}
+      tolerations: {{- toYaml .Values.replica.tolerations | nindent 8 }}
+      {{- end }}
+      {{- if .Values.replica.topologySpreadConstraints }}
+      topologySpreadConstraints: {{- toYaml .Values.replica.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.replica.podSecurityContext.enabled }}
+      securityContext: {{- omit .Values.replica.podSecurityContext "enabled" | toYaml | nindent 8 }}
+      {{- end }}
+      {{- if .Values.replica.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.replica.terminationGracePeriodSeconds }}
+      {{- end }}
+      initContainers:
+        {{- if .Values.volumePermissions.enabled }}
+        - name: volume-permissions
+          image: {{ include "valkey.volumePermissions.image" . }}
+          imagePullPolicy: {{ .Values.volumePermissions.image.pullPolicy | quote }}
+          command:
+            - /bin/bash
+          args:
+            - -ec
+            - |
+              chown -R 1001:1001 /data
+          {{- if .Values.volumePermissions.containerSecurityContext.enabled }}
+          securityContext: {{- omit .Values.volumePermissions.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          {{- if .Values.volumePermissions.resources }}
+          resources: {{- toYaml .Values.volumePermissions.resources | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: valkey-data
+              mountPath: /data
+        {{- end }}
+        {{- with .Values.replica.initContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      containers:
+        - name: valkey
+          image: {{ include "valkey.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
+          {{- if .Values.replica.containerSecurityContext.enabled }}
+          securityContext: {{- omit .Values.replica.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          command:
+            - /bin/bash
+          args:
+            - -c
+            - /opt/bitnami/scripts/start-scripts/start-replica.sh
+          env:
+            - name: BITNAMI_DEBUG
+              value: {{ ternary "true" "false" (or .Values.image.debug .Values.diagnosticMode.enabled) | quote }}
+            - name: VALKEY_REPLICATION_MODE
+              value: replica
+            - name: VALKEY_MASTER_HOST
+              value: {{ include "valkey.master.serviceName" . }}
+            - name: VALKEY_MASTER_PORT_NUMBER
+              value: {{ include "valkey.port" . | quote }}
+            - name: VALKEY_PORT
+              value: {{ include "valkey.port" . | quote }}
+            {{- if (include "valkey.auth.enabled" .) }}
+            - name: VALKEY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "valkey.secretName" . }}
+                  key: {{ include "valkey.secretPasswordKey" . }}
+            - name: VALKEY_MASTER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "valkey.secretName" . }}
+                  key: {{ include "valkey.secretPasswordKey" . }}
+            {{- else }}
+            - name: ALLOW_EMPTY_PASSWORD
+              value: "yes"
+            {{- end }}
+            {{- if (include "valkey.tls.enabled" .) }}
+            - name: VALKEY_TLS_ENABLED
+              value: "yes"
+            - name: VALKEY_TLS_PORT
+              value: {{ .Values.tls.port | quote }}
+            - name: VALKEY_TLS_AUTH_CLIENTS
+              value: {{ ternary "yes" "no" .Values.tls.authClients | quote }}
+            - name: VALKEY_TLS_CERT_FILE
+              value: {{ include "valkey.tls.certFilename" . }}
+            - name: VALKEY_TLS_KEY_FILE
+              value: {{ include "valkey.tls.certKeyFilename" . }}
+            - name: VALKEY_TLS_CA_FILE
+              value: {{ include "valkey.tls.caCertFilename" . }}
+            {{- end }}
+            {{- if .Values.replica.extraEnvVars }}
+            {{- toYaml .Values.replica.extraEnvVars | nindent 12 }}
+            {{- end }}
+          {{- if or .Values.replica.extraEnvVarsCM .Values.replica.extraEnvVarsSecret }}
+          envFrom:
+            {{- if .Values.replica.extraEnvVarsCM }}
+            - configMapRef:
+                name: {{ .Values.replica.extraEnvVarsCM }}
+            {{- end }}
+            {{- if .Values.replica.extraEnvVarsSecret }}
+            - secretRef:
+                name: {{ .Values.replica.extraEnvVarsSecret }}
+            {{- end }}
+          {{- end }}
+          ports:
+            - name: valkey
+              containerPort: {{ include "valkey.port" . }}
+              protocol: TCP
+            {{- if (include "valkey.tls.enabled" .) }}
+            - name: valkey-tls
+              containerPort: {{ .Values.tls.port }}
+              protocol: TCP
+            {{- end }}
+          {{- if not .Values.diagnosticMode.enabled }}
+          livenessProbe:
+            initialDelaySeconds: {{ .Values.replica.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.replica.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.replica.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.replica.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.replica.livenessProbe.failureThreshold }}
+            exec:
+              command:
+                - sh
+                - -c
+                - /health/ping_liveness_local.sh 5
+          readinessProbe:
+            initialDelaySeconds: {{ .Values.replica.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.replica.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.replica.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.replica.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.replica.readinessProbe.failureThreshold }}
+            exec:
+              command:
+                - sh
+                - -c
+                - /health/ping_readiness_local.sh 1
+          {{- end }}
+          {{- if .Values.replica.resources }}
+          resources: {{- toYaml .Values.replica.resources | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: health
+              mountPath: /health
+            {{- if (include "valkey.createConfigmap" .) }}
+            - name: config
+              mountPath: /opt/bitnami/valkey/conf
+            {{- end }}
+            - name: valkey-data
+              mountPath: /data
+              {{- if .Values.replica.persistence.subPath }}
+              subPath: {{ .Values.replica.persistence.subPath }}
+              {{- end }}
+            {{- if (include "valkey.tls.enabled" .) }}
+            - name: valkey-certificates
+              mountPath: /opt/bitnami/valkey/certs
+              readOnly: true
+            {{- end }}
+            {{- with .Values.replica.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+        {{- if (include "valkey.metrics.enabled" .) }}
+        - name: metrics
+          image: {{ include "valkey.metrics.image" . }}
+          imagePullPolicy: {{ .Values.metrics.image.pullPolicy | quote }}
+          {{- if .Values.metrics.containerSecurityContext.enabled }}
+          securityContext: {{- omit .Values.metrics.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              if [[ -f '/secrets/valkey-password' ]]; then
+                export REDIS_PASSWORD=$(cat /secrets/valkey-password)
+              fi
+              redis_exporter{{- range $key, $value := .Values.metrics.extraArgs }} --{{ $key }}={{ $value }}{{- end }}
+          env:
+            - name: REDIS_ALIAS
+              value: {{ include "valkey.fullname" . }}
+            {{- if (include "valkey.auth.enabled" .) }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "valkey.secretName" . }}
+                  key: {{ include "valkey.secretPasswordKey" . }}
+            {{- end }}
+            {{- if (include "valkey.tls.enabled" .) }}
+            - name: REDIS_ADDR
+              value: rediss://localhost:{{ .Values.tls.port }}
+            - name: REDIS_EXPORTER_TLS_CLIENT_KEY_FILE
+              value: {{ include "valkey.tls.certKeyFilename" . }}
+            - name: REDIS_EXPORTER_TLS_CLIENT_CERT_FILE
+              value: {{ include "valkey.tls.certFilename" . }}
+            - name: REDIS_EXPORTER_TLS_CA_CERT_FILE
+              value: {{ include "valkey.tls.caCertFilename" . }}
+            {{- else }}
+            - name: REDIS_ADDR
+              value: redis://localhost:{{ include "valkey.port" . }}
+            {{- end }}
+          ports:
+            - name: http-metrics
+              containerPort: 9121
+              protocol: TCP
+          {{- if .Values.metrics.resources }}
+          resources: {{- toYaml .Values.metrics.resources | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- if (include "valkey.auth.enabled" .) }}
+            - name: valkey-password
+              mountPath: /secrets/
+            {{- end }}
+            {{- if (include "valkey.tls.enabled" .) }}
+            - name: valkey-certificates
+              mountPath: /opt/bitnami/valkey/certs
+              readOnly: true
+            {{- end }}
+        {{- end }}
+        {{- with .Values.replica.sidecars }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      volumes:
+        - name: health
+          configMap:
+            name: {{ printf "%s-health" (include "valkey.fullname" .) }}
+            defaultMode: 0755
+        {{- if (include "valkey.createConfigmap" .) }}
+        - name: config
+          configMap:
+            name: {{ include "valkey.configmapName" . }}
+        {{- end }}
+        {{- if (include "valkey.auth.enabled" .) }}
+        - name: valkey-password
+          secret:
+            secretName: {{ include "valkey.secretName" . }}
+            items:
+              - key: {{ include "valkey.secretPasswordKey" . }}
+                path: valkey-password
+        {{- end }}
+        {{- if (include "valkey.tls.enabled" .) }}
+        - name: valkey-certificates
+          secret:
+            secretName: {{ include "valkey.tls.secretName" . }}
+            defaultMode: 256
+        {{- end }}
+        {{- with .Values.replica.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+  {{- if .Values.replica.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: valkey-data
+        labels:
+          {{- include "valkey.replica.labels" . | nindent 10 }}
+        {{- if .Values.replica.persistence.annotations }}
+        annotations: {{- toYaml .Values.replica.persistence.annotations | nindent 10 }}
+        {{- end }}
+      spec:
+        accessModes:
+          {{- range .Values.replica.persistence.accessModes }}
+          - {{ . | quote }}
+          {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.replica.persistence.size | quote }}
+        {{- if .Values.replica.persistence.selector }}
+        selector: {{- toYaml .Values.replica.persistence.selector | nindent 10 }}
+        {{- end }}
+        {{- include "valkey.replica.storageClass" . | nindent 8 }}
+  {{- else }}
+        - name: valkey-data
+          emptyDir: {}
+  {{- end }}
+{{- end }}

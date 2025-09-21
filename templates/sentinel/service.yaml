@@ -1,0 +1,73 @@
+{{- if eq .Values.architecture "sentinel" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "valkey.sentinel.serviceName" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.sentinel.labels" . | nindent 4 }}
+  {{- if or .Values.sentinel.service.annotations .Values.commonAnnotations }}
+  annotations:
+    {{- with .Values.sentinel.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  type: {{ .Values.sentinel.service.type }}
+  {{- if and .Values.sentinel.service.clusterIP (eq .Values.sentinel.service.type "ClusterIP") }}
+  clusterIP: {{ .Values.sentinel.service.clusterIP }}
+  {{- end }}
+  {{- if .Values.sentinel.service.sessionAffinity }}
+  sessionAffinity: {{ .Values.sentinel.service.sessionAffinity }}
+  {{- end }}
+  {{- if .Values.sentinel.service.sessionAffinityConfig }}
+  sessionAffinityConfig: {{- toYaml .Values.sentinel.service.sessionAffinityConfig | nindent 4 }}
+  {{- end }}
+  {{- if or (eq .Values.sentinel.service.type "LoadBalancer") (eq .Values.sentinel.service.type "NodePort") }}
+  externalTrafficPolicy: {{ .Values.sentinel.service.externalTrafficPolicy | quote }}
+  {{- end }}
+  {{- if and (eq .Values.sentinel.service.type "LoadBalancer") (not (empty .Values.sentinel.service.loadBalancerIP)) }}
+  loadBalancerIP: {{ .Values.sentinel.service.loadBalancerIP }}
+  {{- end }}
+  {{- if and (eq .Values.sentinel.service.type "LoadBalancer") (not (empty .Values.sentinel.service.loadBalancerSourceRanges)) }}
+  loadBalancerSourceRanges: {{- toYaml .Values.sentinel.service.loadBalancerSourceRanges | nindent 4 }}
+  {{- end }}
+  {{- if and .Values.sentinel.service.internalTrafficPolicy (eq .Values.sentinel.service.type "ClusterIP") }}
+  internalTrafficPolicy: {{ .Values.sentinel.service.internalTrafficPolicy }}
+  {{- end }}
+  ports:
+    - name: tcp-sentinel
+      port: {{ .Values.sentinel.service.port | default 26379 }}
+      targetPort: valkey-sentinel
+      {{- if and (or (eq .Values.sentinel.service.type "NodePort") (eq .Values.sentinel.service.type "LoadBalancer")) (not (empty .Values.sentinel.service.nodePorts.sentinel)) }}
+      nodePort: {{ .Values.sentinel.service.nodePorts.sentinel }}
+      {{- else if eq .Values.sentinel.service.type "ClusterIP" }}
+      nodePort: null
+      {{- end }}
+      protocol: TCP
+    {{- if (include "valkey.tls.enabled" .) }}
+    - name: tcp-sentinel-tls
+      port: {{ .Values.tls.port | default 6380 }}
+      targetPort: sentinel-tls
+      {{- if and (or (eq .Values.sentinel.service.type "NodePort") (eq .Values.sentinel.service.type "LoadBalancer")) (not (empty .Values.sentinel.service.nodePorts.sentinelTls)) }}
+      nodePort: {{ .Values.sentinel.service.nodePorts.sentinelTls }}
+      {{- else if eq .Values.sentinel.service.type "ClusterIP" }}
+      nodePort: null
+      {{- end }}
+      protocol: TCP
+    {{- end }}
+    {{- range .Values.sentinel.service.extraPorts }}
+    - name: {{ .name }}
+      port: {{ .port }}
+      protocol: {{ default "TCP" .protocol | quote }}
+      targetPort: {{ .targetPort }}
+      {{- if .nodePort }}
+      nodePort: {{ .nodePort }}
+      {{- end }}
+    {{- end }}
+  selector:
+    {{- include "valkey.sentinel.selectorLabels" . | nindent 4 }}
+{{- end }}

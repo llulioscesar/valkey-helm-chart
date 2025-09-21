@@ -28,6 +28,7 @@ auth:
   password: ""
   existingSecret: ""
   existingSecretPasswordKey: "password"
+  sentinel: false
 
 # Network Policy
 networkPolicy:
@@ -122,29 +123,194 @@ sentinel:
   enabled: false
   replicaCount: 3
   quorum: 2
+  masterSet: mymaster
+  downAfterMilliseconds: 30000
+  failoverTimeout: 180000
+  parallelSyncs: 1
 
-# Master configuration for sentinel mode
-master:
-  replicaCount: 1
+  image:
+    registry: docker.io
+    repository: valkey/valkey
+    tag: "8.1.3"
+    pullPolicy: IfNotPresent
+
+  serviceAccount:
+    create: false
+    annotations: {}
+    name: ""
+    automountServiceAccountToken: true
+
+  podSecurityContext:
+    enabled: true
+    fsGroup: 999
+    runAsUser: 999
+    runAsGroup: 999
+
+  containerSecurityContext:
+    enabled: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 999
+
   resources:
     limits:
       memory: 256Mi
     requests:
       cpu: 100m
       memory: 128Mi
+
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 20
+    periodSeconds: 5
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 5
+
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 20
+    periodSeconds: 5
+    timeoutSeconds: 1
+    successThreshold: 1
+    failureThreshold: 5
+
+  service:
+    type: ClusterIP
+    port: 26379
+    clusterIP: ""
+    nodePort: ""
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    annotations: {}
+    sessionAffinity: None
+    sessionAffinityConfig: {}
+    internalTrafficPolicy: Cluster
+    externalTrafficPolicy: Cluster
+    extraPorts: []
+    nodePorts:
+      sentinel: ""
+      sentinelTls: ""
+
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  topologySpreadConstraints: []
+  priorityClassName: ""
+  terminationGracePeriodSeconds: 30
+
+  podAnnotations: {}
+  extraEnvVars: []
+  extraEnvVarsCM: ""
+  extraEnvVarsSecret: ""
+  extraVolumes: []
+  extraVolumeMounts: []
+  initContainers: []
+  sidecars: []
+
+# Master configuration for sentinel mode
+master:
+  replicaCount: 1
+
+  serviceAccount:
+    create: false
+    annotations: {}
+    name: ""
+    automountServiceAccountToken: true
+
+  podSecurityContext:
+    enabled: true
+    fsGroup: 999
+    runAsUser: 999
+    runAsGroup: 999
+
+  containerSecurityContext:
+    enabled: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 999
+
+  resources:
+    limits:
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 20
+    periodSeconds: 5
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 5
+
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 20
+    periodSeconds: 5
+    timeoutSeconds: 1
+    successThreshold: 1
+    failureThreshold: 5
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  priorityClassName: ""
+  terminationGracePeriodSeconds: 30
+
   persistence:
     enabled: true
     storageClass: ""
     accessModes:
       - ReadWriteOnce
     size: 8Gi
+    annotations: {}
+    selector: {}
+
   service:
     type: ClusterIP
     port: 6379
-    targetPort: valkey
+    clusterIP: ""
+    nodePort: ""
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    annotations: {}
+    sessionAffinity: None
+    sessionAffinityConfig: {}
+    internalTrafficPolicy: Cluster
+    externalTrafficPolicy: Cluster
+    extraPorts: []
+    nodePorts:
+      valkey: ""
+      valkeyTls: ""
+
+  podAnnotations: {}
+  extraEnvVars: []
+  extraEnvVarsCM: ""
+  extraEnvVarsSecret: ""
+  extraVolumes: []
+  extraVolumeMounts: []
+  initContainers: []
+  sidecars: []
+
+  podSecurityPolicy:
+    enabled: false
+
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+    maxUnavailable: ""
+
   configuration: |-
     # Valkey master configuration
     bind 0.0.0.0
@@ -162,25 +328,95 @@ master:
 # Replica configuration for sentinel mode
 replica:
   replicaCount: 2
+
+  serviceAccount:
+    create: false
+    annotations: {}
+    name: ""
+    automountServiceAccountToken: true
+
+  podSecurityContext:
+    enabled: true
+    fsGroup: 999
+    runAsUser: 999
+    runAsGroup: 999
+
+  containerSecurityContext:
+    enabled: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 999
+
   resources:
     limits:
       memory: 256Mi
     requests:
       cpu: 100m
       memory: 128Mi
+
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 20
+    periodSeconds: 5
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 5
+
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 20
+    periodSeconds: 5
+    timeoutSeconds: 1
+    successThreshold: 1
+    failureThreshold: 5
+
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  topologySpreadConstraints: []
+  priorityClassName: ""
+  terminationGracePeriodSeconds: 30
+
   persistence:
     enabled: true
     storageClass: ""
     accessModes:
       - ReadWriteOnce
     size: 8Gi
+    annotations: {}
+    selector: {}
+    subPath: ""
+
   service:
     type: ClusterIP
     port: 6379
-    targetPort: valkey
+    clusterIP: ""
+    nodePort: ""
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    annotations: {}
+    sessionAffinity: None
+    sessionAffinityConfig: {}
+    internalTrafficPolicy: Cluster
+    externalTrafficPolicy: Cluster
+    extraPorts: []
+    nodePorts:
+      valkey: ""
+      valkeyTls: ""
+
+  podAnnotations: {}
+  extraEnvVars: []
+  extraEnvVarsCM: ""
+  extraEnvVarsSecret: ""
+  extraVolumes: []
+  extraVolumeMounts: []
+  initContainers: []
+  sidecars: []
+
   configuration: |-
     # Valkey replica configuration
     bind 0.0.0.0
@@ -196,17 +432,33 @@ replica:
 # Metrics configuration
 metrics:
   enabled: false
+  port: 9121
+
   image:
     registry: docker.io
     repository: oliver006/redis_exporter
     tag: "v1.45.0"
     pullPolicy: IfNotPresent
+
+  containerSecurityContext:
+    enabled: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 999
+
   resources:
     limits:
       memory: 256Mi
     requests:
       cpu: 100m
       memory: 128Mi
+
+  extraArgs: {}
+
   service:
     type: ClusterIP
     port: 9121
@@ -215,6 +467,42 @@ metrics:
     loadBalancerIP: ""
     loadBalancerSourceRanges: []
     clusterIP: ""
+    sessionAffinity: None
+    sessionAffinityConfig: {}
+    internalTrafficPolicy: Cluster
+    externalTrafficPolicy: Cluster
+    extraPorts: []
+
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    interval: ""
+    scrapeTimeout: ""
+    honorLabels: false
+    metricRelabelings: []
+    relabelings: []
+    selector: {}
+    annotations: {}
+    jobLabel: ""
+
+  podMonitor:
+    enabled: false
+    namespace: ""
+    interval: ""
+    scrapeTimeout: ""
+    honorLabels: false
+    metricRelabelings: []
+    relabelings: []
+    selector: {}
+    annotations: {}
+    jobLabel: ""
+
+  prometheusRule:
+    enabled: false
+    namespace: ""
+    labels: {}
+    annotations: {}
+    rules: []
 
 # Init containers for volume permissions
 volumePermissions:
@@ -224,6 +512,24 @@ volumePermissions:
     repository: alpine
     tag: "3.19"
     pullPolicy: IfNotPresent
+
+  containerSecurityContext:
+    enabled: true
+    capabilities:
+      drop:
+      - ALL
+      add:
+      - CHOWN
+      - FOWNER
+      - DAC_OVERRIDE
+    runAsUser: 0
+
+  resources:
+    limits:
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
 
 # Sysctls configuration
 sysctls:
@@ -244,6 +550,12 @@ extraVolumeMounts: []
 # TLS Configuration
 tls:
   enabled: false
+  port: 6380
+  existingSecret: ""
+  certFilename: "tls.crt"
+  certKeyFilename: "tls.key"
+  caCertFilename: "ca.crt"
+  authClients: true
 
 # Extra resources to deploy
 extraDeploy: []
@@ -254,3 +566,17 @@ extraDeploy: []
 # Service Binding configuration
 serviceBinding:
   enabled: false
+
+# Headless service configuration
+headlessService:
+  annotations: {}
+  extraPorts: []
+
+# Pod Security Policy
+podSecurityPolicy:
+  enabled: false
+
+# Diagnostic mode
+diagnosticMode:
+  enabled: false
+
