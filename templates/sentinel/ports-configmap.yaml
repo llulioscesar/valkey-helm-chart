@@ -1,0 +1,36 @@
+{{- if eq .Values.architecture "sentinel" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "valkey.fullname" . }}-sentinel-ports
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.sentinel.labels" . | nindent 4 }}
+  {{- with (include "valkey.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+data:
+  sentinel-ports.conf: |-
+    # Sentinel port configuration
+    port {{ .Values.sentinel.service.sentinelPort }}
+
+    # Sentinel announce configuration
+    {{- if .Values.sentinel.service.createNodeService }}
+    {{- $sentinelServiceName := include "valkey.sentinel.serviceName" . }}
+    {{- range $i := until (.Values.sentinel.replicaCount | int) }}
+    # Node {{ $i }} announce settings
+    sentinel announce-ip {{ $sentinelServiceName }}-{{ $i }}.{{ $.Release.Namespace }}.svc.{{ $.Values.clusterDomain | default "cluster.local" }}
+    sentinel announce-port {{ $.Values.sentinel.service.sentinelPort }}
+    {{- end }}
+    {{- else }}
+    # Default announce settings
+    sentinel announce-ip {{ include "valkey.sentinel.serviceName" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}
+    sentinel announce-port {{ .Values.sentinel.service.sentinelPort }}
+    {{- end }}
+
+    # Additional sentinel configuration
+    sentinel deny-scripts-reconfig yes
+    sentinel resolve-hostnames yes
+    sentinel announce-hostnames yes
+{{- end }}

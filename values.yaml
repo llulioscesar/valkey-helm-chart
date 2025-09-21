@@ -7,6 +7,13 @@ global:
   imageRegistry: ""
   imagePullSecrets: []
   storageClass: ""
+  # Compatibility settings
+  compatibility:
+    openshift:
+      adaptSecurityContext: auto
+
+# Cluster domain for service discovery
+clusterDomain: cluster.local
 
 # Valkey image configuration
 image:
@@ -30,14 +37,23 @@ auth:
 # Network Policy
 networkPolicy:
   enabled: false
+  allowExternal: true
   ingressNSMatchLabels: {}
   ingressNSPodMatchLabels: {}
+  # Allow access from specific namespaces
+  # Example:
+  # ingressNSMatchLabels:
+  #   name: myNamespace
+  # Allow access from pods with specific labels
+  # ingressNSPodMatchLabels:
+  #   app: myApp
 
 # Service Account
 serviceAccount:
   create: true
   annotations: {}
   name: ""
+  automountServiceAccountToken: true
 
 # Pod Security Context
 podSecurityContext:
@@ -82,6 +98,16 @@ standalone:
     enabled: false
     minAvailable: 1
     maxUnavailable: ""
+
+  # Horizontal Pod Autoscaler
+  hpa:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 50
+    targetMemoryUtilizationPercentage: 50
+    customMetrics: []
+    behavior: {}
 
   # Persistence
   persistence:
@@ -173,6 +199,22 @@ sentinel:
     # Security
     protected-mode no
 
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 2
+    maxUnavailable: ""
+
+  # Horizontal Pod Autoscaler
+  hpa:
+    enabled: false
+    minReplicas: 3
+    maxReplicas: 9
+    targetCPUUtilizationPercentage: 50
+    targetMemoryUtilizationPercentage: 50
+    customMetrics: []
+    behavior: {}
+
 # Master configuration for sentinel mode
 master:
   # Pod configuration
@@ -231,6 +273,23 @@ master:
     # Security
     protected-mode no
 
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+    maxUnavailable: ""
+
+  # Service Account
+  serviceAccount:
+    create: false
+    annotations: {}
+    name: ""
+    automountServiceAccountToken: true
+
+  # Pod Security Policy
+  podSecurityPolicy:
+    enabled: false
+
 # Replica configuration for sentinel mode
 replica:
   # Pod configuration
@@ -287,6 +346,29 @@ replica:
     # Security
     protected-mode no
 
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+    maxUnavailable: ""
+
+  # Horizontal Pod Autoscaler
+  hpa:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 50
+    targetMemoryUtilizationPercentage: 50
+    customMetrics: []
+    behavior: {}
+
+  # Service Account
+  serviceAccount:
+    create: false
+    annotations: {}
+    name: ""
+    automountServiceAccountToken: true
+
 # Metrics configuration
 metrics:
   enabled: false
@@ -305,20 +387,43 @@ metrics:
     type: ClusterIP
     port: 9121
     annotations: {}
+    # Service can be exposed externally
+    # nodePort: 30000
+    # loadBalancerIP: ""
+    # loadBalancerSourceRanges: []
   serviceMonitor:
     enabled: false
     namespace: ""
     interval: 30s
     scrapeTimeout: ""
     labels: {}
+    honorLabels: false
+    relabelings: []
+    metricRelabelings: []
+    namespaceSelector: {}
+  podMonitor:
+    enabled: false
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: ""
+    labels: {}
+    honorLabels: false
+    relabelings: []
+    metricRelabelings: []
+    namespaceSelector: {}
+  prometheusRule:
+    enabled: false
+    namespace: ""
+    labels: {}
+    rules: []
 
 # Init containers for volume permissions
 volumePermissions:
   enabled: false
   image:
     registry: docker.io
-    repository: bitnami/os-shell
-    tag: "11-debian-11-r92"
+    repository: alpine
+    tag: "3.19"
     pullPolicy: IfNotPresent
   resources:
     limits:
@@ -333,8 +438,8 @@ sysctls:
   mountHostSys: false
   image:
     registry: docker.io
-    repository: bitnami/os-shell
-    tag: "11-debian-11-r92"
+    repository: alpine
+    tag: "3.19"
     pullPolicy: IfNotPresent
   resources:
     limits:
@@ -342,3 +447,91 @@ sysctls:
     requests:
       cpu: 100m
       memory: 128Mi
+
+# Additional configuration options
+existingConfigmap: ""
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  maxUnavailable: ""
+  # Applies to both standalone and sentinel mode
+
+# Horizontal Pod Autoscaler
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 50
+  targetMemoryUtilizationPercentage: 50
+  # Custom metrics
+  # customMetrics: []
+
+# Extra environment variables
+extraEnvVars: []
+# Example:
+# - name: MY_VAR
+#   value: "my-value"
+
+# Extra volumes
+extraVolumes: []
+# Example:
+# - name: extra-volume
+#   configMap:
+#     name: my-configmap
+
+# Extra volume mounts
+extraVolumeMounts: []
+# Example:
+# - name: extra-volume
+#   mountPath: /etc/extra
+#   readOnly: true
+
+# TLS Configuration
+tls:
+  enabled: false
+  # Use existing secret for TLS certificates
+  existingSecret: ""
+  # Certificate filenames in the secret
+  certFilename: "tls.crt"
+  certKeyFilename: "tls.key"
+  certCAFilename: "ca.crt"
+  dhParamsFilename: "dh2048.pem"
+  # Mount path for certificates
+  certificatesMountPath: "/opt/valkey/certs"
+  # Require clients to authenticate with certificates
+  authClients: true
+  # Certificate values (if not using existingSecret)
+  cert: ""
+  key: ""
+  caCert: ""
+  dhParams: ""
+
+# Extra resources to deploy
+extraDeploy: []
+# Example:
+# - apiVersion: v1
+#   kind: ConfigMap
+#   metadata:
+#     name: extra-configmap
+#   data:
+#     key: value
+
+# External service configuration
+service:
+  external:
+    enabled: false
+    type: LoadBalancer
+    port: 6379
+    nodePort: ""
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    clusterIP: ""
+    annotations: {}
+    sessionAffinity: None
+    sessionAffinityConfig: {}
+
+# Service Binding configuration
+serviceBinding:
+  enabled: false

@@ -1,0 +1,74 @@
+CHART NAME: {{ .Chart.Name }}
+CHART VERSION: {{ .Chart.Version }}
+APP VERSION: {{ .Chart.AppVersion }}
+
+** Please be patient while the chart is being deployed **
+
+{{- include "valkey.validateValues" . }}
+
+{{- if eq .Values.architecture "standalone" }}
+
+Valkey can be accessed via port {{ .Values.standalone.service.port }} on the following DNS name from within your cluster:
+
+    {{ include "valkey.fullname" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}
+
+{{- if include "valkey.auth.enabled" . }}
+
+To get your password run:
+
+    export VALKEY_PASSWORD=$(kubectl get secret --namespace {{ .Release.Namespace }} {{ include "valkey.secretName" . }} -o jsonpath="{.data.{{ include "valkey.secretPasswordKey" . }}}" | base64 -d)
+
+{{- end }}
+
+To connect to your Valkey server:
+
+1. Run a Valkey pod that you can use as a client:
+
+   kubectl run --namespace {{ .Release.Namespace }} valkey-client --restart='Never' --image {{ include "valkey.image" . }} --command -- sleep infinity
+
+2. Copy the connection commands and then run them from inside the pod:
+
+   kubectl exec --namespace {{ .Release.Namespace }} -ti valkey-client -- bash
+
+3. Connect using the Valkey CLI:
+
+   {{- if include "valkey.auth.enabled" . }}
+   REDISCLI_AUTH="$VALKEY_PASSWORD" valkey-cli -h {{ include "valkey.fullname" . }} -p {{ .Values.standalone.service.port }}
+   {{- else }}
+   valkey-cli -h {{ include "valkey.fullname" . }} -p {{ .Values.standalone.service.port }}
+   {{- end }}
+
+{{- else }}
+
+Valkey can be accessed via port {{ .Values.master.service.port }} on the following DNS names from within your cluster:
+
+    {{ include "valkey.master.serviceName" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }} (read/write)
+    {{ include "valkey.replica.serviceName" . }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }} (read-only)
+
+{{- if include "valkey.auth.enabled" . }}
+
+To get your password run:
+
+    export VALKEY_PASSWORD=$(kubectl get secret --namespace {{ .Release.Namespace }} {{ include "valkey.secretName" . }} -o jsonpath="{.data.{{ include "valkey.secretPasswordKey" . }}}" | base64 -d)
+
+{{- end }}
+
+To connect to your Valkey server:
+
+1. Run a Valkey pod that you can use as a client:
+
+   kubectl run --namespace {{ .Release.Namespace }} valkey-client --restart='Never' --image {{ include "valkey.image" . }} --command -- sleep infinity
+
+2. Copy the connection commands and then run them from inside the pod:
+
+   kubectl exec --namespace {{ .Release.Namespace }} -ti valkey-client -- bash
+
+3. Connect using the Valkey CLI:
+
+   {{- if include "valkey.auth.enabled" . }}
+   REDISCLI_AUTH="$VALKEY_PASSWORD" valkey-cli -h {{ include "valkey.master.serviceName" . }} -p {{ .Values.master.service.port }}
+   {{- else }}
+   valkey-cli -h {{ include "valkey.master.serviceName" . }} -p {{ .Values.master.service.port }}
+   {{- end }}
+
+{{- end }}

@@ -1,0 +1,32 @@
+{{- if and (eq .Values.architecture "sentinel") .Values.master.persistence.enabled (not .Values.master.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: valkey-data-{{ include "valkey.fullname" . }}-master-0
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.master.labels" . | nindent 4 }}
+  {{- with .Values.master.persistence.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- range .Values.master.persistence.accessModes }}
+    - {{ . | quote }}
+    {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.master.persistence.size | quote }}
+  {{- if .Values.master.persistence.storageClass }}
+  {{- if (eq "-" .Values.master.persistence.storageClass) }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: {{ .Values.master.persistence.storageClass | quote }}
+  {{- end }}
+  {{- end }}
+  {{- if .Values.master.persistence.selector }}
+  selector:
+    {{- toYaml .Values.master.persistence.selector | nindent 4 }}
+  {{- end }}
+{{- end }}

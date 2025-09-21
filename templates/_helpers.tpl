@@ -229,3 +229,118 @@ Sentinel service name
 {{- define "valkey.sentinel.serviceName" -}}
 {{- printf "%s-sentinel" (include "valkey.fullname" .) }}
 {{- end }}
+
+{{/*
+Get the volume permissions init container image
+*/}}
+{{- define "valkey.volumePermissions.image" -}}
+{{- $registryName := .Values.volumePermissions.image.registry -}}
+{{- $repositoryName := .Values.volumePermissions.image.repository -}}
+{{- $tag := .Values.volumePermissions.image.tag | toString -}}
+{{- if .Values.global.imageRegistry }}
+    {{- $registryName = .Values.global.imageRegistry -}}
+{{- end -}}
+{{- printf "%s/%s:%s" $registryName $repositoryName $tag -}}
+{{- end }}
+
+{{/*
+Return the proper Valkey configuration configmap name
+*/}}
+{{- define "valkey.configmapName" -}}
+{{- if .Values.existingConfigmap -}}
+{{- .Values.existingConfigmap -}}
+{{- else -}}
+{{- include "valkey.fullname" . -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Return the Valkey configuration
+*/}}
+{{- define "valkey.configuration" -}}
+{{- if eq .Values.architecture "standalone" }}
+{{- .Values.standalone.configuration | default "" }}
+{{- else if eq .Values.architecture "sentinel" }}
+{{- .Values.master.configuration | default "" }}
+{{- end }}
+{{- end }}
+
+{{/*
+Return if Valkey authentication is enabled
+*/}}
+{{- define "valkey.auth.enabled" -}}
+{{- if .Values.auth.enabled }}
+{{- true }}
+{{- else }}
+{{- false }}
+{{- end }}
+{{- end }}
+
+{{/*
+Return the Valkey port
+*/}}
+{{- define "valkey.port" -}}
+{{- if eq .Values.architecture "standalone" }}
+{{- .Values.standalone.service.port | default 6379 }}
+{{- else }}
+{{- .Values.master.service.port | default 6379 }}
+{{- end }}
+{{- end }}
+
+{{/*
+Return whether NetworkPolicy is enabled
+*/}}
+{{- define "valkey.networkPolicy.enabled" -}}
+{{- if .Values.networkPolicy.enabled }}
+{{- true }}
+{{- else }}
+{{- false }}
+{{- end }}
+{{- end }}
+
+{{/*
+Return true if persistence is enabled
+*/}}
+{{- define "valkey.persistence.enabled" -}}
+{{- if eq .Values.architecture "standalone" }}
+{{- .Values.standalone.persistence.enabled }}
+{{- else }}
+{{- or .Values.master.persistence.enabled .Values.replica.persistence.enabled }}
+{{- end }}
+{{- end }}
+
+{{/*
+Compile all warnings into a single message, and call fail.
+*/}}
+{{- define "valkey.validateValues" -}}
+{{- $messages := list -}}
+{{- $messages := append $messages (include "valkey.validateValues.architecture" .) -}}
+{{- $messages := append $messages (include "valkey.validateValues.sentinel" .) -}}
+{{- $messages := without $messages "" -}}
+{{- $message := join "\n" $messages -}}
+{{- if $message -}}
+{{- printf "\nVALUES VALIDATION:\n%s" $message | fail -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Validate values of Valkey - Architecture
+*/}}
+{{- define "valkey.validateValues.architecture" -}}
+{{- if not (or (eq .Values.architecture "standalone") (eq .Values.architecture "sentinel")) -}}
+valkey: architecture
+    Invalid architecture selected. Valid values are "standalone" and
+    "sentinel". Please set a valid architecture (--set architecture="xxxx")
+{{- end -}}
+{{- end -}}
+
+{{/*
+Validate values of Valkey - Sentinel
+*/}}
+{{- define "valkey.validateValues.sentinel" -}}
+{{- if and (eq .Values.architecture "sentinel") (lt (.Values.sentinel.replicaCount | int) 3) -}}
+valkey: sentinel.replicaCount
+    Sentinel replica count should be at least 3 for high availability.
+    Please set a valid number of replicas (--set sentinel.replicaCount=3)
+{{- end -}}
+{{- end -}}

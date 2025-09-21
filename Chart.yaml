@@ -1,9 +1,21 @@
 apiVersion: v2
 name: valkey
-description: A Helm chart for Valkey - A high-performance data structure server compatible with Redis
+description: Valkey is an open source, high-performance data structure server compatible with Redis. It supports strings, hashes, lists, sets, and sorted sets.
 type: application
 version: 0.1.7
 appVersion: "8.1.3"
+
+annotations:
+  images: |
+    - name: valkey
+      image: docker.io/valkey/valkey:8.1.3
+    - name: os-shell
+      image: docker.io/alpine:3.19
+    - name: redis-exporter
+      image: docker.io/oliver006/redis_exporter:v1.45.0
+  licenses: Apache-2.0
+  category: database
+
 keywords:
   - valkey
   - redis
@@ -12,9 +24,16 @@ keywords:
   - nosql
   - keyvalue
   - sentinel
+  - high-performance
+
 home: https://valkey.io/
+icon: https://valkey.io/assets/images/valkey-logo.svg
+
 sources:
   - https://github.com/valkey-io/valkey
+  - https://github.com/start-codex/valkey-helm-chart
+
 maintainers:
-  - name: valkey-helm-chart
+  - name: Valkey Community
     url: https://github.com/start-codex/valkey-helm-chart
+    email: contact@valkey.io
