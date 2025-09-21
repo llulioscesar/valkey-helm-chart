@@ -1,4 +1,4 @@
-# Valkey Helm Chart Configuration
+# Valkey Helm Chart - Minimal Configuration
 
 # Deployment mode: standalone or sentinel
 architecture: standalone
@@ -7,10 +7,6 @@ global:
   imageRegistry: ""
   imagePullSecrets: []
   storageClass: ""
-  # Compatibility settings
-  compatibility:
-    openshift:
-      adaptSecurityContext: auto
 
 # Cluster domain for service discovery
 clusterDomain: cluster.local
@@ -21,7 +17,6 @@ image:
   repository: valkey/valkey
   tag: "8.1.3"
   pullPolicy: IfNotPresent
-  pullSecrets: []
 
 # Common configuration
 nameOverride: ""
@@ -40,20 +35,16 @@ networkPolicy:
   allowExternal: true
   ingressNSMatchLabels: {}
   ingressNSPodMatchLabels: {}
-  # Allow access from specific namespaces
-  # Example:
-  # ingressNSMatchLabels:
-  #   name: myNamespace
-  # Allow access from pods with specific labels
-  # ingressNSPodMatchLabels:
-  #   app: myApp
+
+# RBAC configuration
+rbac:
+  create: false
 
 # Service Account
 serviceAccount:
   create: true
   annotations: {}
   name: ""
-  automountServiceAccountToken: true
 
 # Pod Security Context
 podSecurityContext:
@@ -77,10 +68,8 @@ commonLabels: {}
 
 # Standalone Configuration
 standalone:
-  # Pod configuration
   replicaCount: 1
 
-  # Resource configuration
   resources:
     limits:
       memory: 256Mi
@@ -88,28 +77,10 @@ standalone:
       cpu: 100m
       memory: 128Mi
 
-  # Node selection
   nodeSelector: {}
   tolerations: []
   affinity: {}
 
-  # Pod disruption budget
-  podDisruptionBudget:
-    enabled: false
-    minAvailable: 1
-    maxUnavailable: ""
-
-  # Horizontal Pod Autoscaler
-  hpa:
-    enabled: false
-    minReplicas: 1
-    maxReplicas: 3
-    targetCPUUtilizationPercentage: 50
-    targetMemoryUtilizationPercentage: 50
-    customMetrics: []
-    behavior: {}
-
-  # Persistence
   persistence:
     enabled: true
     storageClass: ""
@@ -117,16 +88,13 @@ standalone:
       - ReadWriteOnce
     size: 8Gi
     annotations: {}
-    selector: {}
 
-  # Service configuration
   service:
     type: ClusterIP
     port: 6379
     targetPort: valkey
     annotations: {}
 
-  # Configuration
   configuration: |-
     # Valkey configuration
     bind 0.0.0.0
@@ -152,105 +120,31 @@ standalone:
 # Sentinel Configuration
 sentinel:
   enabled: false
-
-  # Number of sentinel instances
   replicaCount: 3
-
-  # Quorum for failover decisions
   quorum: 2
-
-  # Failover timeout
-  failoverTimeout: 180000
-
-  # Parallel syncs
-  parallelSyncs: 1
-
-  # Down after milliseconds
-  downAfterMilliseconds: 30000
-
-  # Resource configuration
-  resources:
-    limits:
-      memory: 256Mi
-    requests:
-      cpu: 100m
-      memory: 128Mi
-
-  # Node selection
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-
-  # Service configuration
-  service:
-    type: ClusterIP
-    sentinelPort: 26379
-    annotations: {}
-
-  # Configuration
-  configuration: |-
-    # Sentinel configuration
-    bind 0.0.0.0
-    port 26379
-
-    # Logging
-    loglevel notice
-
-    # Security
-    protected-mode no
-
-  # Pod disruption budget
-  podDisruptionBudget:
-    enabled: false
-    minAvailable: 2
-    maxUnavailable: ""
-
-  # Horizontal Pod Autoscaler
-  hpa:
-    enabled: false
-    minReplicas: 3
-    maxReplicas: 9
-    targetCPUUtilizationPercentage: 50
-    targetMemoryUtilizationPercentage: 50
-    customMetrics: []
-    behavior: {}
 
 # Master configuration for sentinel mode
 master:
-  # Pod configuration
   replicaCount: 1
-
-  # Resource configuration
   resources:
     limits:
       memory: 256Mi
     requests:
       cpu: 100m
       memory: 128Mi
-
-  # Node selection
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
-  # Persistence
   persistence:
     enabled: true
     storageClass: ""
     accessModes:
       - ReadWriteOnce
     size: 8Gi
-    annotations: {}
-    selector: {}
-
-  # Service configuration
   service:
     type: ClusterIP
     port: 6379
     targetPort: valkey
-    annotations: {}
-
-  # Configuration
   configuration: |-
     # Valkey master configuration
     bind 0.0.0.0
@@ -258,74 +152,35 @@ master:
     tcp-backlog 511
     timeout 0
     tcp-keepalive 300
-
-    # Memory configuration
     maxmemory-policy allkeys-lru
-
-    # Persistence
     save 900 1
     save 300 10
     save 60 10000
-
-    # Logging
     loglevel notice
-
-    # Security
     protected-mode no
-
-  # Pod disruption budget
-  podDisruptionBudget:
-    enabled: false
-    minAvailable: 1
-    maxUnavailable: ""
-
-  # Service Account
-  serviceAccount:
-    create: false
-    annotations: {}
-    name: ""
-    automountServiceAccountToken: true
-
-  # Pod Security Policy
-  podSecurityPolicy:
-    enabled: false
 
 # Replica configuration for sentinel mode
 replica:
-  # Pod configuration
   replicaCount: 2
-
-  # Resource configuration
   resources:
     limits:
       memory: 256Mi
     requests:
       cpu: 100m
       memory: 128Mi
-
-  # Node selection
   nodeSelector: {}
   tolerations: []
   affinity: {}
-
-  # Persistence
   persistence:
     enabled: true
     storageClass: ""
     accessModes:
       - ReadWriteOnce
     size: 8Gi
-    annotations: {}
-    selector: {}
-
-  # Service configuration
   service:
     type: ClusterIP
     port: 6379
     targetPort: valkey
-    annotations: {}
-
-  # Configuration
   configuration: |-
     # Valkey replica configuration
     bind 0.0.0.0
@@ -333,41 +188,10 @@ replica:
     tcp-backlog 511
     timeout 0
     tcp-keepalive 300
-
-    # Memory configuration
     maxmemory-policy allkeys-lru
-
-    # Persistence
     save ""
-
-    # Logging
     loglevel notice
-
-    # Security
     protected-mode no
-
-  # Pod disruption budget
-  podDisruptionBudget:
-    enabled: false
-    minAvailable: 1
-    maxUnavailable: ""
-
-  # Horizontal Pod Autoscaler
-  hpa:
-    enabled: false
-    minReplicas: 2
-    maxReplicas: 6
-    targetCPUUtilizationPercentage: 50
-    targetMemoryUtilizationPercentage: 50
-    customMetrics: []
-    behavior: {}
-
-  # Service Account
-  serviceAccount:
-    create: false
-    annotations: {}
-    name: ""
-    automountServiceAccountToken: true
 
 # Metrics configuration
 metrics:
@@ -387,10 +211,10 @@ metrics:
     type: ClusterIP
     port: 9121
     annotations: {}
-    # Service can be exposed externally
-    # nodePort: 30000
-    # loadBalancerIP: ""
-    # loadBalancerSourceRanges: []
+    nodePort: ""
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    clusterIP: ""
   serviceMonitor:
     enabled: false
     namespace: ""
@@ -400,17 +224,6 @@ metrics:
     honorLabels: false
     relabelings: []
     metricRelabelings: []
-    namespaceSelector: {}
-  podMonitor:
-    enabled: false
-    namespace: ""
-    interval: 30s
-    scrapeTimeout: ""
-    labels: {}
-    honorLabels: false
-    relabelings: []
-    metricRelabelings: []
-    namespaceSelector: {}
   prometheusRule:
     enabled: false
     namespace: ""
@@ -425,98 +238,29 @@ volumePermissions:
     repository: alpine
     tag: "3.19"
     pullPolicy: IfNotPresent
-  resources:
-    limits:
-      memory: 128Mi
-    requests:
-      cpu: 100m
-      memory: 128Mi
 
 # Sysctls configuration
 sysctls:
   enabled: false
-  mountHostSys: false
-  image:
-    registry: docker.io
-    repository: alpine
-    tag: "3.19"
-    pullPolicy: IfNotPresent
-  resources:
-    limits:
-      memory: 128Mi
-    requests:
-      cpu: 100m
-      memory: 128Mi
 
 # Additional configuration options
 existingConfigmap: ""
 
-# Pod Disruption Budget
-podDisruptionBudget:
-  enabled: false
-  minAvailable: 1
-  maxUnavailable: ""
-  # Applies to both standalone and sentinel mode
-
-# Horizontal Pod Autoscaler
-hpa:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 50
-  targetMemoryUtilizationPercentage: 50
-  # Custom metrics
-  # customMetrics: []
-
 # Extra environment variables
 extraEnvVars: []
-# Example:
-# - name: MY_VAR
-#   value: "my-value"
 
 # Extra volumes
 extraVolumes: []
-# Example:
-# - name: extra-volume
-#   configMap:
-#     name: my-configmap
 
 # Extra volume mounts
 extraVolumeMounts: []
-# Example:
-# - name: extra-volume
-#   mountPath: /etc/extra
-#   readOnly: true
 
 # TLS Configuration
 tls:
   enabled: false
-  # Use existing secret for TLS certificates
-  existingSecret: ""
-  # Certificate filenames in the secret
-  certFilename: "tls.crt"
-  certKeyFilename: "tls.key"
-  certCAFilename: "ca.crt"
-  dhParamsFilename: "dh2048.pem"
-  # Mount path for certificates
-  certificatesMountPath: "/opt/valkey/certs"
-  # Require clients to authenticate with certificates
-  authClients: true
-  # Certificate values (if not using existingSecret)
-  cert: ""
-  key: ""
-  caCert: ""
-  dhParams: ""
 
 # Extra resources to deploy
 extraDeploy: []
-# Example:
-# - apiVersion: v1
-#   kind: ConfigMap
-#   metadata:
-#     name: extra-configmap
-#   data:
-#     key: value
 
 # External service configuration
 service:
