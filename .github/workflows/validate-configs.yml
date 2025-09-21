@@ -81,7 +81,7 @@ jobs:
         run: |
           # Check that required resources are generated
           if [ "${{ matrix.config.name }}" = "standalone-no-auth" ] || [ "${{ matrix.config.name }}" = "standalone-with-auth" ] || [ "${{ matrix.config.name }}" = "standalone-existing-secret" ] || [ "${{ matrix.config.name }}" = "standalone-with-persistence" ] || [ "${{ matrix.config.name }}" = "with-metrics" ]; then
-            grep -q "kind: Deployment" output-${{ matrix.config.name }}.yaml || (echo "❌ Deployment not found" && exit 1)
+            grep -q "kind: StatefulSet" output-${{ matrix.config.name }}.yaml || (echo "❌ StatefulSet not found" && exit 1)
             grep -q "kind: Service" output-${{ matrix.config.name }}.yaml || (echo "❌ Service not found" && exit 1)
             grep -q "kind: ConfigMap" output-${{ matrix.config.name }}.yaml || (echo "❌ ConfigMap not found" && exit 1)
           fi
@@ -97,7 +97,7 @@ jobs:
           fi
 
           if [[ "${{ matrix.config.name }}" == *"persistence"* ]]; then
-            grep -q "kind: PersistentVolumeClaim" output-${{ matrix.config.name }}.yaml || (echo "❌ PVC not found when persistence enabled" && exit 1)
+            grep -q "volumeClaimTemplates" output-${{ matrix.config.name }}.yaml || (echo "❌ VolumeClaimTemplates not found when persistence enabled" && exit 1)
           fi
 
           echo "✅ Manifest validation passed for ${{ matrix.config.name }}"

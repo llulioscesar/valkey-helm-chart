@@ -47,17 +47,51 @@ jobs:
           mkdir -p .cr-release-packages
           mkdir -p public
 
-          # Package the chart
+          # Download existing index.yaml and .tgz files to preserve history
+          echo "Downloading existing repository files..."
+          wget -q https://start-codex.github.io/valkey-helm-chart/index.yaml -O existing-index.yaml || echo "No existing index.yaml found"
+
+          # Download existing .tgz files if index exists
+          if [ -f existing-index.yaml ]; then
+            echo "Parsing existing chart versions..."
+            # Extract URLs of existing chart packages from index.yaml and download to both directories
+            urls=$(grep -o 'https://start-codex.github.io/valkey-helm-chart/[^"]*\.tgz' existing-index.yaml || true)
+            if [ -n "$urls" ]; then
+              echo "$urls" | while read url; do
+                if [ -n "$url" ]; then
+                  filename=$(basename "$url")
+                  echo "Downloading existing chart: $filename"
+                  # Download to both .cr-release-packages and public for efficiency
+                  wget -q "$url" -O ".cr-release-packages/$filename" || echo "Failed to download $filename to .cr-release-packages"
+                  wget -q "$url" -O "public/$filename" || echo "Failed to download $filename to public"
+                fi
+              done
+            else
+              echo "No existing chart packages found in index"
+            fi
+
+            # Copy existing index to merge later
+            cp existing-index.yaml .cr-release-packages/ || true
+          fi
+
+          # Package the current chart
           helm package . -d .cr-release-packages
 
-          # Create the index
-          helm repo index .cr-release-packages --url https://start-codex.github.io/valkey-helm-chart
+          # Create/update the index with existing and new charts
+          if [ -f .cr-release-packages/existing-index.yaml ]; then
+            echo "Merging with existing index..."
+            helm repo index .cr-release-packages --url https://start-codex.github.io/valkey-helm-chart --merge .cr-release-packages/existing-index.yaml
+          else
+            echo "Creating new index..."
+            helm repo index .cr-release-packages --url https://start-codex.github.io/valkey-helm-chart
+          fi
 
-          # Copy files to public directory
-          if [ -f .cr-release-packages/*.tgz ]; then
+          # Copy new chart files to public directory
+          if ls .cr-release-packages/*.tgz 1> /dev/null 2>&1; then
             cp .cr-release-packages/*.tgz public/ || true
           fi
 
+          # Copy the updated index
           if [ -f .cr-release-packages/index.yaml ]; then
             cp .cr-release-packages/index.yaml public/
           fi
@@ -67,6 +101,17 @@ jobs:
           # Verify what we have
           echo "Contents of public directory:"
           ls -la public/
+
+          # Show chart versions in the index
+          if [ -f public/index.yaml ]; then
+            echo ""
+            echo "Chart versions in repository:"
+            grep -A 2 "version:" public/index.yaml | grep "version:" | sort -V || echo "No versions found"
+
+            echo ""
+            echo "Total charts in repository:"
+            grep "\.tgz" public/index.yaml | wc -l || echo "0"
+          fi
 
           # Create a simple index.html
           cat > public/index.html << 'EOF'

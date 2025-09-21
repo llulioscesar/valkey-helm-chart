@@ -85,8 +85,13 @@ spec:
             - |
               {{- if .Values.auth.enabled }}
               export REDISCLI_AUTH="$VALKEY_PASSWORD"
-              {{- end }}
+              # Copy config and add requirepass
+              cp /opt/valkey/etc/valkey.conf /tmp/valkey.conf
+              echo "requirepass $VALKEY_PASSWORD" >> /tmp/valkey.conf
+              valkey-server /tmp/valkey.conf
+              {{- else }}
               valkey-server /opt/valkey/etc/valkey.conf
+              {{- end }}
           env:
             {{- if .Values.auth.enabled }}
             - name: VALKEY_PASSWORD
