@@ -1,0 +1,176 @@
+---
+# Source: valkey/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-valkey
+  namespace: "default"
+  labels:
+    helm.sh/chart: valkey-0.1.5
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/instance: test
+    app.kubernetes.io/version: "8.1.3"
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: valkey/templates/standalone-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-valkey
+  namespace: "default"
+  labels:
+    helm.sh/chart: valkey-0.1.5
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/instance: test
+    app.kubernetes.io/version: "8.1.3"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: standalone
+data:
+  valkey.conf: |
+    # Valkey configuration
+    bind 0.0.0.0
+    port 6379
+    tcp-backlog 511
+    timeout 0
+    tcp-keepalive 300
+
+    # Memory configuration
+    maxmemory-policy allkeys-lru
+
+    # Persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+
+    # Logging
+    loglevel notice
+
+    # Security
+    protected-mode no
+---
+# Source: valkey/templates/standalone-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-valkey
+  namespace: "default"
+  labels:
+    helm.sh/chart: valkey-0.1.5
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/instance: test
+    app.kubernetes.io/version: "8.1.3"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: standalone
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+      targetPort: valkey
+      protocol: TCP
+      name: valkey
+  selector:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/instance: test
+    app.kubernetes.io/component: standalone
+---
+# Source: valkey/templates/standalone-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-valkey
+  namespace: "default"
+  labels:
+    helm.sh/chart: valkey-0.1.5
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/instance: test
+    app.kubernetes.io/version: "8.1.3"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: standalone
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+      app.kubernetes.io/instance: test
+      app.kubernetes.io/component: standalone
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: valkey
+        app.kubernetes.io/instance: test
+        app.kubernetes.io/component: standalone
+    spec:
+      serviceAccountName: test-valkey
+      securityContext:
+        fsGroup: 999
+        runAsGroup: 999
+        runAsUser: 999
+      containers:
+        - name: valkey
+          image: docker.io/valkey/valkey:8.1.3
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 999
+          command:
+            - /bin/bash
+          args:
+            - -c
+            - |
+              valkey-server /opt/valkey/etc/valkey.conf
+          env:
+          ports:
+            - name: valkey
+              containerPort: 6379
+              protocol: TCP
+          livenessProbe:
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 5
+            exec:
+              command:
+                - sh
+                - -c
+                - |
+                  valkey-cli ping
+          readinessProbe:
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            timeoutSeconds: 1
+            successThreshold: 1
+            failureThreshold: 5
+            exec:
+              command:
+                - sh
+                - -c
+                - |
+                  valkey-cli ping
+          resources:
+            limits:
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: valkey-data
+              mountPath: /data
+            - name: config
+              mountPath: /opt/valkey/etc/valkey.conf
+              subPath: valkey.conf
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: test-valkey
+        - name: tmp
+          emptyDir: {}
+        - name: valkey-data
+          emptyDir: {}
