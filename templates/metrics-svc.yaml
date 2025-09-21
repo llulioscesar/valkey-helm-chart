@@ -1,0 +1,63 @@
+{{- if .Values.metrics.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "valkey.metrics.serviceName" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.labels" . | nindent 4 }}
+    app.kubernetes.io/component: metrics
+  {{- if or .Values.metrics.service.annotations .Values.commonAnnotations }}
+  annotations:
+    {{- with .Values.metrics.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.commonAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  type: {{ .Values.metrics.service.type }}
+  {{- if and .Values.metrics.service.clusterIP (eq .Values.metrics.service.type "ClusterIP") }}
+  clusterIP: {{ .Values.metrics.service.clusterIP }}
+  {{- end }}
+  {{- if .Values.metrics.service.sessionAffinity }}
+  sessionAffinity: {{ .Values.metrics.service.sessionAffinity }}
+  {{- end }}
+  {{- if .Values.metrics.service.sessionAffinityConfig }}
+  sessionAffinityConfig: {{- toYaml .Values.metrics.service.sessionAffinityConfig | nindent 4 }}
+  {{- end }}
+  {{- if or (eq .Values.metrics.service.type "LoadBalancer") (eq .Values.metrics.service.type "NodePort") }}
+  externalTrafficPolicy: {{ .Values.metrics.service.externalTrafficPolicy | quote }}
+  {{- end }}
+  {{- if and (eq .Values.metrics.service.type "LoadBalancer") (not (empty .Values.metrics.service.loadBalancerIP)) }}
+  loadBalancerIP: {{ .Values.metrics.service.loadBalancerIP }}
+  {{- end }}
+  {{- if and (eq .Values.metrics.service.type "LoadBalancer") (not (empty .Values.metrics.service.loadBalancerSourceRanges)) }}
+  loadBalancerSourceRanges: {{- toYaml .Values.metrics.service.loadBalancerSourceRanges | nindent 4 }}
+  {{- end }}
+  {{- if and .Values.metrics.service.internalTrafficPolicy (eq .Values.metrics.service.type "ClusterIP") }}
+  internalTrafficPolicy: {{ .Values.metrics.service.internalTrafficPolicy }}
+  {{- end }}
+  ports:
+    - name: http-metrics
+      port: {{ .Values.metrics.service.port | default 9121 }}
+      targetPort: http-metrics
+      {{- if and (or (eq .Values.metrics.service.type "NodePort") (eq .Values.metrics.service.type "LoadBalancer")) (not (empty .Values.metrics.service.nodePort)) }}
+      nodePort: {{ .Values.metrics.service.nodePort }}
+      {{- else if eq .Values.metrics.service.type "ClusterIP" }}
+      nodePort: null
+      {{- end }}
+      protocol: TCP
+    {{- range .Values.metrics.service.extraPorts }}
+    - name: {{ .name }}
+      port: {{ .port }}
+      protocol: {{ default "TCP" .protocol | quote }}
+      targetPort: {{ .targetPort }}
+      {{- if .nodePort }}
+      nodePort: {{ .nodePort }}
+      {{- end }}
+    {{- end }}
+  selector:
+    {{- include "valkey.selectorLabels" . | nindent 4 }}
+{{- end }}

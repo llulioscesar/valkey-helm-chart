@@ -344,3 +344,281 @@ valkey: sentinel.replicaCount
     Please set a valid number of replicas (--set sentinel.replicaCount=3)
 {{- end -}}
 {{- end -}}
+
+{{/*
+Return the proper Valkey Sentinel image name
+*/}}
+{{- define "valkey.sentinel.image" -}}
+{{- $registryName := .Values.sentinel.image.registry -}}
+{{- $repositoryName := .Values.sentinel.image.repository -}}
+{{- $tag := .Values.sentinel.image.tag | toString -}}
+{{- if .Values.global.imageRegistry }}
+    {{- $registryName = .Values.global.imageRegistry -}}
+{{- end -}}
+{{- printf "%s/%s:%s" $registryName $repositoryName $tag -}}
+{{- end }}
+
+{{/*
+Create the name of the master service account to use
+*/}}
+{{- define "valkey.master.serviceAccountName" -}}
+{{- if .Values.master.serviceAccount.create -}}
+    {{ default (printf "%s-master" (include "valkey.fullname" .)) .Values.master.serviceAccount.name }}
+{{- else -}}
+    {{- if .Values.serviceAccount.create -}}
+        {{ template "valkey.serviceAccountName" . }}
+    {{- else -}}
+        {{ default "default" .Values.master.serviceAccount.name }}
+    {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Create the name of the replica service account to use
+*/}}
+{{- define "valkey.replica.serviceAccountName" -}}
+{{- if .Values.replica.serviceAccount.create -}}
+    {{ default (printf "%s-replica" (include "valkey.fullname" .)) .Values.replica.serviceAccount.name }}
+{{- else -}}
+    {{- if .Values.serviceAccount.create -}}
+        {{ template "valkey.serviceAccountName" . }}
+    {{- else -}}
+        {{ default "default" .Values.replica.serviceAccount.name }}
+    {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Create the name of the sentinel service account to use
+*/}}
+{{- define "valkey.sentinel.serviceAccountName" -}}
+{{- if .Values.sentinel.serviceAccount.create -}}
+    {{ default (printf "%s-sentinel" (include "valkey.fullname" .)) .Values.sentinel.serviceAccount.name }}
+{{- else -}}
+    {{- if .Values.serviceAccount.create -}}
+        {{ template "valkey.serviceAccountName" . }}
+    {{- else -}}
+        {{ default "default" .Values.sentinel.serviceAccount.name }}
+    {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return true if a configmap object should be created
+*/}}
+{{- define "valkey.createConfigmap" -}}
+{{- if empty .Values.existingConfigmap }}
+    {{- true -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return the Valkey password
+*/}}
+{{- define "valkey.password" -}}
+{{- if .Values.auth.enabled -}}
+    {{- if .Values.auth.password -}}
+        {{- .Values.auth.password -}}
+    {{- else -}}
+        {{- randAlphaNum 10 -}}
+    {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return true if TLS is enabled
+*/}}
+{{- define "valkey.tls.enabled" -}}
+{{- if .Values.tls.enabled }}
+    {{- true -}}
+{{- else }}
+    {{- false -}}
+{{- end }}
+{{- end }}
+
+{{/*
+Return the TLS secret name
+*/}}
+{{- define "valkey.tls.secretName" -}}
+{{- if .Values.tls.existingSecret -}}
+    {{- .Values.tls.existingSecret -}}
+{{- else -}}
+    {{- printf "%s-tls" (include "valkey.fullname" .) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return the path to the cert file
+*/}}
+{{- define "valkey.tls.certFilename" -}}
+{{- if .Values.tls.certFilename -}}
+    {{- .Values.tls.certFilename -}}
+{{- else -}}
+    {{- "tls.crt" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return the path to the cert key file
+*/}}
+{{- define "valkey.tls.certKeyFilename" -}}
+{{- if .Values.tls.certKeyFilename -}}
+    {{- .Values.tls.certKeyFilename -}}
+{{- else -}}
+    {{- "tls.key" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return the path to the CA cert file
+*/}}
+{{- define "valkey.tls.caCertFilename" -}}
+{{- if .Values.tls.caCertFilename -}}
+    {{- .Values.tls.caCertFilename -}}
+{{- else -}}
+    {{- "ca.crt" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return if metrics are enabled
+*/}}
+{{- define "valkey.metrics.enabled" -}}
+{{- if .Values.metrics.enabled }}
+    {{- true -}}
+{{- else }}
+    {{- false -}}
+{{- end }}
+{{- end -}}
+
+{{/*
+Return the metrics service name
+*/}}
+{{- define "valkey.metrics.serviceName" -}}
+{{- printf "%s-metrics" (include "valkey.fullname" .) -}}
+{{- end -}}
+
+{{/*
+Return the headless service name
+*/}}
+{{- define "valkey.headless.serviceName" -}}
+{{- printf "%s-headless" (include "valkey.fullname" .) -}}
+{{- end -}}
+
+{{/*
+Return whether RBAC is enabled
+*/}}
+{{- define "valkey.rbac.enabled" -}}
+{{- if .Values.rbac.create }}
+    {{- true -}}
+{{- else }}
+    {{- false -}}
+{{- end }}
+{{- end -}}
+
+{{/*
+Return whether PodSecurityPolicy is enabled
+*/}}
+{{- define "valkey.psp.enabled" -}}
+{{- if .Values.podSecurityPolicy.enabled }}
+    {{- true -}}
+{{- else }}
+    {{- false -}}
+{{- end }}
+{{- end -}}
+
+{{/*
+Return whether ServiceMonitor is enabled
+*/}}
+{{- define "valkey.serviceMonitor.enabled" -}}
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
+    {{- true -}}
+{{- else }}
+    {{- false -}}
+{{- end }}
+{{- end -}}
+
+{{/*
+Return whether PodMonitor is enabled
+*/}}
+{{- define "valkey.podMonitor.enabled" -}}
+{{- if and .Values.metrics.enabled .Values.metrics.podMonitor.enabled }}
+    {{- true -}}
+{{- else }}
+    {{- false -}}
+{{- end }}
+{{- end -}}
+
+{{/*
+Return whether PrometheusRule is enabled
+*/}}
+{{- define "valkey.prometheusRule.enabled" -}}
+{{- if and .Values.metrics.enabled .Values.metrics.prometheusRule.enabled }}
+    {{- true -}}
+{{- else }}
+    {{- false -}}
+{{- end }}
+{{- end -}}
+
+{{/*
+Return the appropriate storageClass for master
+*/}}
+{{- define "valkey.master.storageClass" -}}
+{{- if .Values.master.persistence.storageClass -}}
+  {{- if (eq "-" .Values.master.persistence.storageClass) -}}
+      {{- printf "storageClassName: \"\"" -}}
+  {{- else }}
+      {{- printf "storageClassName: %s" .Values.master.persistence.storageClass -}}
+  {{- end -}}
+{{- else -}}
+  {{- if .Values.global.storageClass -}}
+      {{- if (eq "-" .Values.global.storageClass) -}}
+          {{- printf "storageClassName: \"\"" -}}
+      {{- else }}
+          {{- printf "storageClassName: %s" .Values.global.storageClass -}}
+      {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return the appropriate storageClass for replica
+*/}}
+{{- define "valkey.replica.storageClass" -}}
+{{- if .Values.replica.persistence.storageClass -}}
+  {{- if (eq "-" .Values.replica.persistence.storageClass) -}}
+      {{- printf "storageClassName: \"\"" -}}
+  {{- else }}
+      {{- printf "storageClassName: %s" .Values.replica.persistence.storageClass -}}
+  {{- end -}}
+{{- else -}}
+  {{- if .Values.global.storageClass -}}
+      {{- if (eq "-" .Values.global.storageClass) -}}
+          {{- printf "storageClassName: \"\"" -}}
+      {{- else }}
+          {{- printf "storageClassName: %s" .Values.global.storageClass -}}
+      {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return the appropriate storageClass for standalone
+*/}}
+{{- define "valkey.standalone.storageClass" -}}
+{{- if .Values.standalone.persistence.storageClass -}}
+  {{- if (eq "-" .Values.standalone.persistence.storageClass) -}}
+      {{- printf "storageClassName: \"\"" -}}
+  {{- else }}
+      {{- printf "storageClassName: %s" .Values.standalone.persistence.storageClass -}}
+  {{- end -}}
+{{- else -}}
+  {{- if .Values.global.storageClass -}}
+      {{- if (eq "-" .Values.global.storageClass) -}}
+          {{- printf "storageClassName: \"\"" -}}
+      {{- else }}
+          {{- printf "storageClassName: %s" .Values.global.storageClass -}}
+      {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}

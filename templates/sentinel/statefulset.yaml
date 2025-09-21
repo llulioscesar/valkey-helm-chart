@@ -1,0 +1,220 @@
+{{- if eq .Values.architecture "sentinel" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ printf "%s-sentinel" (include "valkey.fullname" .) }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.sentinel.labels" . | nindent 4 }}
+  {{- with .Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.sentinel.replicaCount }}
+  serviceName: {{ include "valkey.headless.serviceName" . }}
+  selector:
+    matchLabels:
+      {{- include "valkey.sentinel.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "valkey.sentinel.labels" . | nindent 8 }}
+      annotations:
+        {{- if (include "valkey.createConfigmap" .) }}
+        checksum/configmap: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- end }}
+        checksum/health: {{ include (print $.Template.BasePath "/health-configmap.yaml") . | sha256sum }}
+        {{- with .Values.sentinel.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.commonAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "valkey.sentinel.serviceAccountName" . }}
+      {{- if .Values.sentinel.priorityClassName }}
+      priorityClassName: {{ .Values.sentinel.priorityClassName | quote }}
+      {{- end }}
+      {{- if .Values.sentinel.affinity }}
+      affinity: {{- toYaml .Values.sentinel.affinity | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sentinel.nodeSelector }}
+      nodeSelector: {{- toYaml .Values.sentinel.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sentinel.tolerations }}
+      tolerations: {{- toYaml .Values.sentinel.tolerations | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sentinel.topologySpreadConstraints }}
+      topologySpreadConstraints: {{- toYaml .Values.sentinel.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sentinel.podSecurityContext.enabled }}
+      securityContext: {{- omit .Values.sentinel.podSecurityContext "enabled" | toYaml | nindent 8 }}
+      {{- end }}
+      {{- if .Values.sentinel.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.sentinel.terminationGracePeriodSeconds }}
+      {{- end }}
+      initContainers:
+        {{- with .Values.sentinel.initContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      containers:
+        - name: sentinel
+          image: {{ include "valkey.sentinel.image" . }}
+          imagePullPolicy: {{ .Values.sentinel.image.pullPolicy | quote }}
+          {{- if .Values.sentinel.containerSecurityContext.enabled }}
+          securityContext: {{- omit .Values.sentinel.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          command:
+            - /bin/bash
+          args:
+            - -c
+            - /opt/bitnami/scripts/start-scripts/start-sentinel.sh
+          env:
+            - name: BITNAMI_DEBUG
+              value: {{ ternary "true" "false" (or .Values.image.debug .Values.diagnosticMode.enabled) | quote }}
+            - name: VALKEY_SENTINEL_ENABLED
+              value: "yes"
+            - name: VALKEY_SENTINEL_PORT_NUMBER
+              value: {{ .Values.sentinel.service.port | default 26379 | quote }}
+            - name: VALKEY_SENTINEL_QUORUM
+              value: {{ .Values.sentinel.quorum | quote }}
+            - name: VALKEY_SENTINEL_MASTER_NAME
+              value: {{ .Values.sentinel.masterSet | quote }}
+            - name: VALKEY_SENTINEL_MASTER_HOST
+              value: {{ include "valkey.master.serviceName" . }}
+            - name: VALKEY_SENTINEL_MASTER_PORT_NUMBER
+              value: {{ include "valkey.port" . | quote }}
+            - name: VALKEY_SENTINEL_DOWN_AFTER_MILLISECONDS
+              value: {{ .Values.sentinel.downAfterMilliseconds | quote }}
+            - name: VALKEY_SENTINEL_FAILOVER_TIMEOUT
+              value: {{ .Values.sentinel.failoverTimeout | quote }}
+            - name: VALKEY_SENTINEL_PARALLEL_SYNCS
+              value: {{ .Values.sentinel.parallelSyncs | quote }}
+            {{- if (include "valkey.auth.enabled" .) }}
+            - name: VALKEY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "valkey.secretName" . }}
+                  key: {{ include "valkey.secretPasswordKey" . }}
+            {{- if .Values.auth.sentinel }}
+            - name: VALKEY_SENTINEL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "valkey.secretName" . }}
+                  key: {{ include "valkey.secretPasswordKey" . }}
+            {{- end }}
+            {{- else }}
+            - name: ALLOW_EMPTY_PASSWORD
+              value: "yes"
+            {{- end }}
+            {{- if (include "valkey.tls.enabled" .) }}
+            - name: VALKEY_SENTINEL_TLS_ENABLED
+              value: "yes"
+            - name: VALKEY_SENTINEL_TLS_PORT_NUMBER
+              value: {{ .Values.tls.port | quote }}
+            - name: VALKEY_SENTINEL_TLS_AUTH_CLIENTS
+              value: {{ ternary "yes" "no" .Values.tls.authClients | quote }}
+            - name: VALKEY_SENTINEL_TLS_CERT_FILE
+              value: {{ include "valkey.tls.certFilename" . }}
+            - name: VALKEY_SENTINEL_TLS_KEY_FILE
+              value: {{ include "valkey.tls.certKeyFilename" . }}
+            - name: VALKEY_SENTINEL_TLS_CA_FILE
+              value: {{ include "valkey.tls.caCertFilename" . }}
+            {{- end }}
+            {{- if .Values.sentinel.extraEnvVars }}
+            {{- toYaml .Values.sentinel.extraEnvVars | nindent 12 }}
+            {{- end }}
+          {{- if or .Values.sentinel.extraEnvVarsCM .Values.sentinel.extraEnvVarsSecret }}
+          envFrom:
+            {{- if .Values.sentinel.extraEnvVarsCM }}
+            - configMapRef:
+                name: {{ .Values.sentinel.extraEnvVarsCM }}
+            {{- end }}
+            {{- if .Values.sentinel.extraEnvVarsSecret }}
+            - secretRef:
+                name: {{ .Values.sentinel.extraEnvVarsSecret }}
+            {{- end }}
+          {{- end }}
+          ports:
+            - name: valkey-sentinel
+              containerPort: {{ .Values.sentinel.service.port | default 26379 }}
+              protocol: TCP
+            {{- if (include "valkey.tls.enabled" .) }}
+            - name: sentinel-tls
+              containerPort: {{ .Values.tls.port }}
+              protocol: TCP
+            {{- end }}
+          {{- if not .Values.diagnosticMode.enabled }}
+          livenessProbe:
+            initialDelaySeconds: {{ .Values.sentinel.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.sentinel.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.sentinel.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.sentinel.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.sentinel.livenessProbe.failureThreshold }}
+            exec:
+              command:
+                - sh
+                - -c
+                - /health/ping_sentinel.sh 5
+          readinessProbe:
+            initialDelaySeconds: {{ .Values.sentinel.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.sentinel.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.sentinel.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.sentinel.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.sentinel.readinessProbe.failureThreshold }}
+            exec:
+              command:
+                - sh
+                - -c
+                - /health/ping_sentinel.sh 1
+          {{- end }}
+          {{- if .Values.sentinel.resources }}
+          resources: {{- toYaml .Values.sentinel.resources | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: health
+              mountPath: /health
+            {{- if (include "valkey.createConfigmap" .) }}
+            - name: config
+              mountPath: /opt/bitnami/valkey/conf
+            {{- end }}
+            {{- if (include "valkey.tls.enabled" .) }}
+            - name: valkey-certificates
+              mountPath: /opt/bitnami/valkey/certs
+              readOnly: true
+            {{- end }}
+            {{- with .Values.sentinel.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+        {{- with .Values.sentinel.sidecars }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      volumes:
+        - name: health
+          configMap:
+            name: {{ printf "%s-health" (include "valkey.fullname" .) }}
+            defaultMode: 0755
+        {{- if (include "valkey.createConfigmap" .) }}
+        - name: config
+          configMap:
+            name: {{ include "valkey.configmapName" . }}
+        {{- end }}
+        {{- if (include "valkey.auth.enabled" .) }}
+        - name: valkey-password
+          secret:
+            secretName: {{ include "valkey.secretName" . }}
+            items:
+              - key: {{ include "valkey.secretPasswordKey" . }}
+                path: valkey-password
+        {{- end }}
+        {{- if (include "valkey.tls.enabled" .) }}
+        - name: valkey-certificates
+          secret:
+            secretName: {{ include "valkey.tls.secretName" . }}
+            defaultMode: 256
+        {{- end }}
+        {{- with .Values.sentinel.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+{{- end }}
