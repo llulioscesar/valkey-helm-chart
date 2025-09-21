@@ -12,7 +12,26 @@ metadata:
   {{- end }}
 data:
   valkey.conf: |
-{{ .Values.standalone.configuration | indent 4 }}
+    # Valkey configuration
+    bind 0.0.0.0
+    port 6379
+    tcp-backlog 511
+    timeout 0
+    tcp-keepalive 300
+
+    # Memory configuration
+    maxmemory-policy allkeys-lru
+
+    # Persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+
+    # Logging
+    loglevel notice
+
+    # Security
+    protected-mode no
 {{- if .Values.auth.enabled }}
 
     # Authentication
