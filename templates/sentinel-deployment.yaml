@@ -28,15 +28,16 @@ spec:
         {{- end }}
       {{- end }}
     spec:
-      {{- if .Values.image.pullSecrets }}
+      {{- if or .Values.image.pullSecrets .Values.global.imagePullSecrets }}
       imagePullSecrets:
+        {{- if .Values.image.pullSecrets }}
         {{- range .Values.image.pullSecrets }}
         - name: {{ . }}
         {{- end }}
-      {{- else if .Values.global.imagePullSecrets }}
-      imagePullSecrets:
+        {{- else if .Values.global.imagePullSecrets }}
         {{- range .Values.global.imagePullSecrets }}
         - name: {{ . }}
+        {{- end }}
         {{- end }}
       {{- end }}
       serviceAccountName: {{ include "valkey.serviceAccountName" . }}
