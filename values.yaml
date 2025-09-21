@@ -1,0 +1,344 @@
+# Valkey Helm Chart Configuration
+
+# Deployment mode: standalone or sentinel
+architecture: standalone
+
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# Valkey image configuration
+image:
+  registry: docker.io
+  repository: valkey/valkey
+  tag: "8.1.3"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# Common configuration
+nameOverride: ""
+fullnameOverride: ""
+
+# Authentication configuration
+auth:
+  enabled: false
+  password: ""
+  existingSecret: ""
+  existingSecretPasswordKey: "password"
+
+# Network Policy
+networkPolicy:
+  enabled: false
+  ingressNSMatchLabels: {}
+  ingressNSPodMatchLabels: {}
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod Security Context
+podSecurityContext:
+  fsGroup: 999
+  runAsUser: 999
+  runAsGroup: 999
+
+# Security Context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 999
+
+# Common annotations and labels
+commonAnnotations: {}
+commonLabels: {}
+
+# Standalone Configuration
+standalone:
+  # Pod configuration
+  replicaCount: 1
+
+  # Resource configuration
+  resources:
+    limits:
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+    maxUnavailable: ""
+
+  # Persistence
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+    annotations: {}
+    selector: {}
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 6379
+    targetPort: valkey
+    annotations: {}
+
+  # Configuration
+  configuration: |
+    # Valkey configuration
+    bind 0.0.0.0
+    port 6379
+    tcp-backlog 511
+    timeout 0
+    tcp-keepalive 300
+
+    # Memory configuration
+    maxmemory-policy allkeys-lru
+
+    # Persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+
+    # Logging
+    loglevel notice
+
+    # Security
+    protected-mode no
+
+# Sentinel Configuration
+sentinel:
+  enabled: false
+
+  # Number of sentinel instances
+  replicaCount: 3
+
+  # Quorum for failover decisions
+  quorum: 2
+
+  # Failover timeout
+  failoverTimeout: 180000
+
+  # Parallel syncs
+  parallelSyncs: 1
+
+  # Down after milliseconds
+  downAfterMilliseconds: 30000
+
+  # Resource configuration
+  resources:
+    limits:
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    sentinelPort: 26379
+    annotations: {}
+
+  # Configuration
+  configuration: |
+    # Sentinel configuration
+    bind 0.0.0.0
+    port 26379
+
+    # Logging
+    loglevel notice
+
+    # Security
+    protected-mode no
+
+# Master configuration for sentinel mode
+master:
+  # Pod configuration
+  replicaCount: 1
+
+  # Resource configuration
+  resources:
+    limits:
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Persistence
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+    annotations: {}
+    selector: {}
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 6379
+    targetPort: valkey
+    annotations: {}
+
+  # Configuration
+  configuration: |
+    # Valkey master configuration
+    bind 0.0.0.0
+    port 6379
+    tcp-backlog 511
+    timeout 0
+    tcp-keepalive 300
+
+    # Memory configuration
+    maxmemory-policy allkeys-lru
+
+    # Persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+
+    # Logging
+    loglevel notice
+
+    # Security
+    protected-mode no
+
+# Replica configuration for sentinel mode
+replica:
+  # Pod configuration
+  replicaCount: 2
+
+  # Resource configuration
+  resources:
+    limits:
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Persistence
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+    annotations: {}
+    selector: {}
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 6379
+    targetPort: valkey
+    annotations: {}
+
+  # Configuration
+  configuration: |
+    # Valkey replica configuration
+    bind 0.0.0.0
+    port 6379
+    tcp-backlog 511
+    timeout 0
+    tcp-keepalive 300
+
+    # Memory configuration
+    maxmemory-policy allkeys-lru
+
+    # Persistence
+    save ""
+
+    # Logging
+    loglevel notice
+
+    # Security
+    protected-mode no
+
+# Metrics configuration
+metrics:
+  enabled: false
+  image:
+    registry: docker.io
+    repository: oliver006/redis_exporter
+    tag: "v1.45.0"
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  service:
+    type: ClusterIP
+    port: 9121
+    annotations: {}
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: ""
+    labels: {}
+
+# Init containers for volume permissions
+volumePermissions:
+  enabled: false
+  image:
+    registry: docker.io
+    repository: bitnami/os-shell
+    tag: "11-debian-11-r92"
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Sysctls configuration
+sysctls:
+  enabled: false
+  mountHostSys: false
+  image:
+    registry: docker.io
+    repository: bitnami/os-shell
+    tag: "11-debian-11-r92"
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi

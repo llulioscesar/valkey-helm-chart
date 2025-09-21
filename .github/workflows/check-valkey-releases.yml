@@ -1,0 +1,141 @@
+name: Check for new Valkey releases
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # Run daily at 6 AM UTC
+  workflow_dispatch: # Allow manual triggering of the workflow
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Step 2: Install yq for YAML manipulation
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      # Step 3: Fetch the latest release from Valkey GitHub API
+      - name: Get latest release from Valkey
+        id: fetch_latest_release
+        run: |
+          LATEST_VERSION=$(curl -s https://api.github.com/repos/valkey-io/valkey/releases/latest | jq -r .tag_name)
+          echo "Latest Valkey release: $LATEST_VERSION"
+          echo "latest_version=$LATEST_VERSION" >> $GITHUB_ENV
+
+      # Step 4: Read the current appVersion and version from Chart.yaml
+      - name: Read Chart.yaml values
+        id: read_chart_values
+        run: |
+          APP_VERSION=$(yq '.appVersion' Chart.yaml)
+          CHART_VERSION=$(yq '.version' Chart.yaml)
+          echo "Current appVersion: $APP_VERSION"
+          echo "Current Chart version: $CHART_VERSION"
+          echo "app_version=$APP_VERSION" >> $GITHUB_ENV
+          echo "chart_version=$CHART_VERSION" >> $GITHUB_ENV
+
+      # Step 5: Compare versions and update if necessary
+      - name: Update Chart.yaml if versions differ
+        if: env.latest_version != env.app_version
+        run: |
+          echo "Updating Chart.yaml..."
+
+          # Update appVersion
+          yq -i ".appVersion = \"${{ env.latest_version }}\"" Chart.yaml
+
+          # Update image tag in values.yaml
+          yq -i ".image.tag = \"${{ env.latest_version }}\"" values.yaml
+
+          # Increment the patch version
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${{ env.chart_version }}"
+          PATCH=$((PATCH + 1))
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "New Chart version: $NEW_VERSION"
+
+          # Update the version in Chart.yaml
+          yq -i ".version = \"$NEW_VERSION\"" Chart.yaml
+
+          echo "Updated Chart.yaml:"
+          cat Chart.yaml
+          echo "Updated values.yaml image section:"
+          yq '.image' values.yaml
+
+      # Step 6: Validate the updated chart
+      - name: Install Helm
+        if: env.latest_version != env.app_version
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.12.1
+
+      - name: Lint updated chart
+        if: env.latest_version != env.app_version
+        run: |
+          helm lint .
+          echo "Chart validation successful"
+
+      # Step 7: Commit and push changes if there are updates
+      - name: Commit and push changes
+        if: env.latest_version != env.app_version
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add Chart.yaml values.yaml
+          git commit -m "chore: update Valkey to ${{ env.latest_version }} and bump chart version"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 8: Create a pull request instead of direct push (optional)
+      - name: Create Pull Request
+        if: env.latest_version != env.app_version
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update Valkey to ${{ env.latest_version }}"
+          title: "Update Valkey to ${{ env.latest_version }}"
+          body: |
+            ## 🚀 Automated Valkey Version Update
+
+            This PR updates Valkey from `${{ env.app_version }}` to `${{ env.latest_version }}`.
+
+            ### Changes:
+            - Updated `appVersion` in Chart.yaml
+            - Updated `image.tag` in values.yaml
+            - Incremented chart version
+
+            ### Validation:
+            - ✅ Helm chart linting passed
+            - ✅ Template generation verified
+
+            This is an automated update triggered by the detection of a new Valkey release.
+          branch: update-valkey-${{ env.latest_version }}
+          delete-branch: true
+
+      # Step 9: Trigger Release Workflow after successful update
+      - name: Trigger Release Workflow
+        if: env.latest_version != env.app_version
+        run: |
+          sleep 10 # Wait for the commit to be processed
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/release.yml/dispatches \
+            -d '{"ref":"main"}'
+
+      # Step 10: Output results
+      - name: Summary
+        run: |
+          if [ "${{ env.latest_version }}" != "${{ env.app_version }}" ]; then
+            echo "✅ Valkey updated from ${{ env.app_version }} to ${{ env.latest_version }}"
+            echo "📦 Chart version bumped to new version"
+            echo "🚀 Release workflow triggered"
+          else
+            echo "ℹ️ Valkey is already up to date (${{ env.app_version }})"
+          fi

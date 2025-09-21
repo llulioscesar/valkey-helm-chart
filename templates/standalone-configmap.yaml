@@ -1,0 +1,21 @@
+{{- if eq .Values.architecture "standalone" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "valkey.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.standalone.labels" . | nindent 4 }}
+  {{- with (include "valkey.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+data:
+  valkey.conf: |
+    {{- .Values.standalone.configuration | nindent 4 }}
+    {{- if .Values.auth.enabled }}
+
+    # Authentication
+    requirepass ${VALKEY_PASSWORD}
+    {{- end }}
+{{- end }}

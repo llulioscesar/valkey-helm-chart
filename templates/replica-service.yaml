@@ -1,0 +1,31 @@
+{{- if eq .Values.architecture "sentinel" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "valkey.replica.serviceName" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.replica.labels" . | nindent 4 }}
+  {{- with .Values.replica.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with (include "valkey.annotations" .) }}
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.replica.service.type }}
+  ports:
+    - port: {{ .Values.replica.service.port }}
+      targetPort: {{ .Values.replica.service.targetPort }}
+      protocol: TCP
+      name: valkey
+    {{- if .Values.metrics.enabled }}
+    - port: {{ .Values.metrics.service.port }}
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+    {{- end }}
+  selector:
+    {{- include "valkey.replica.selectorLabels" . | nindent 4 }}
+{{- end }}

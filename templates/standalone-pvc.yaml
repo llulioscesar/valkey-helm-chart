@@ -1,0 +1,37 @@
+{{- if and (eq .Values.architecture "standalone") .Values.standalone.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "valkey.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.standalone.labels" . | nindent 4 }}
+  {{- with .Values.standalone.persistence.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with (include "valkey.annotations" .) }}
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- range .Values.standalone.persistence.accessModes }}
+    - {{ . | quote }}
+    {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.standalone.persistence.size | quote }}
+  {{- if .Values.standalone.persistence.storageClass }}
+  {{- if (eq "-" .Values.standalone.persistence.storageClass) }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: {{ .Values.standalone.persistence.storageClass | quote }}
+  {{- end }}
+  {{- else if .Values.global.storageClass }}
+  storageClassName: {{ .Values.global.storageClass | quote }}
+  {{- end }}
+  {{- with .Values.standalone.persistence.selector }}
+  selector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
