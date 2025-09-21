@@ -14,42 +14,9 @@ metadata:
     {{- . | nindent 4 }}
   {{- end }}
 spec:
+  {{- if .Values.metrics.prometheusRule.rules }}
   groups:
     - name: {{ include "valkey.fullname" . }}
-      rules:
-        - alert: ValkeyDown
-          expr: redis_up == 0
-          for: 0m
-          labels:
-            severity: critical
-          annotations:
-            summary: "Valkey instance is down"
-            description: "Valkey instance {{ `{{ $labels.instance }}` }} is down"
-        - alert: ValkeyMemoryHigh
-          expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 90
-          for: 2m
-          labels:
-            severity: warning
-          annotations:
-            summary: "Valkey memory usage is high"
-            description: "Valkey instance {{ `{{ $labels.instance }}` }} memory usage is above 90%"
-        - alert: ValkeyKeyEviction
-          expr: increase(redis_evicted_keys_total[5m]) > 0
-          for: 0m
-          labels:
-            severity: warning
-          annotations:
-            summary: "Valkey key eviction detected"
-            description: "Valkey instance {{ `{{ $labels.instance }}` }} has evicted {{ `{{ $value }}` }} keys in the last 5 minutes"
-        - alert: ValkeyTooManyConnections
-          expr: redis_connected_clients > redis_config_maxclients * 0.8
-          for: 2m
-          labels:
-            severity: warning
-          annotations:
-            summary: "Valkey too many connections"
-            description: "Valkey instance {{ `{{ $labels.instance }}` }} has too many connections ({{ `{{ $value }}` }} > 80% of max)"
-        {{- if .Values.metrics.prometheusRule.rules }}
-        {{- toYaml .Values.metrics.prometheusRule.rules | nindent 8 }}
-        {{- end }}
+      rules: {{- include "common.tplvalues.render" (dict "value" .Values.metrics.prometheusRule.rules "context" $) | nindent 8 }}
+  {{- end }}
 {{- end }}

@@ -2,28 +2,33 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "valkey.fullname" . }}-metrics
+  name: {{ printf "%s-metrics" (include "valkey.fullname" .) }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
     {{- include "valkey.labels" . | nindent 4 }}
     app.kubernetes.io/component: metrics
-  {{- with .Values.metrics.service.annotations }}
+  {{- if or .Values.metrics.service.annotations (include "valkey.annotations" .) }}
   annotations:
+    {{- with (include "valkey.annotations" .) }}
+    {{- . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.metrics.service.annotations }}
     {{- toYaml . | nindent 4 }}
+    {{- end }}
   {{- end }}
 spec:
   type: {{ .Values.metrics.service.type }}
-  {{- if and (eq .Values.metrics.service.type "LoadBalancer") .Values.metrics.service.loadBalancerIP }}
+  {{- if and .Values.metrics.service.clusterIP (eq .Values.metrics.service.type "ClusterIP") }}
+  clusterIP: {{ .Values.metrics.service.clusterIP }}
+  {{- end }}
+  {{- if and .Values.metrics.service.loadBalancerIP (eq .Values.metrics.service.type "LoadBalancer") }}
   loadBalancerIP: {{ .Values.metrics.service.loadBalancerIP }}
   {{- end }}
   {{- if and (eq .Values.metrics.service.type "LoadBalancer") .Values.metrics.service.loadBalancerSourceRanges }}
   loadBalancerSourceRanges: {{- toYaml .Values.metrics.service.loadBalancerSourceRanges | nindent 4 }}
   {{- end }}
-  {{- if and (eq .Values.metrics.service.type "ClusterIP") .Values.metrics.service.clusterIP }}
-  clusterIP: {{ .Values.metrics.service.clusterIP }}
-  {{- end }}
   ports:
-    - name: http-metrics
+    - name: metrics
       port: {{ .Values.metrics.service.port }}
       protocol: TCP
       targetPort: metrics

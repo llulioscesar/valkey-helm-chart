@@ -2,25 +2,30 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "valkey.fullname" . }}-external
+  name: {{ printf "%s-external" (include "valkey.fullname" .) }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
     {{- include "valkey.labels" . | nindent 4 }}
     app.kubernetes.io/component: external
-  {{- with .Values.service.external.annotations }}
+  {{- if or .Values.service.external.annotations (include "valkey.annotations" .) }}
   annotations:
+    {{- with (include "valkey.annotations" .) }}
+    {{- . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.service.external.annotations }}
     {{- toYaml . | nindent 4 }}
+    {{- end }}
   {{- end }}
 spec:
   type: {{ .Values.service.external.type }}
-  {{- if and (eq .Values.service.external.type "LoadBalancer") .Values.service.external.loadBalancerIP }}
+  {{- if and .Values.service.external.clusterIP (eq .Values.service.external.type "ClusterIP") }}
+  clusterIP: {{ .Values.service.external.clusterIP }}
+  {{- end }}
+  {{- if and .Values.service.external.loadBalancerIP (eq .Values.service.external.type "LoadBalancer") }}
   loadBalancerIP: {{ .Values.service.external.loadBalancerIP }}
   {{- end }}
   {{- if and (eq .Values.service.external.type "LoadBalancer") .Values.service.external.loadBalancerSourceRanges }}
   loadBalancerSourceRanges: {{- toYaml .Values.service.external.loadBalancerSourceRanges | nindent 4 }}
-  {{- end }}
-  {{- if and (eq .Values.service.external.type "ClusterIP") .Values.service.external.clusterIP }}
-  clusterIP: {{ .Values.service.external.clusterIP }}
   {{- end }}
   {{- if .Values.service.external.sessionAffinity }}
   sessionAffinity: {{ .Values.service.external.sessionAffinity }}
@@ -29,16 +34,14 @@ spec:
   sessionAffinityConfig: {{- toYaml .Values.service.external.sessionAffinityConfig | nindent 4 }}
   {{- end }}
   ports:
-    - name: tcp-valkey
+    - name: valkey
       port: {{ .Values.service.external.port }}
+      protocol: TCP
       targetPort: valkey
       {{- if and (or (eq .Values.service.external.type "NodePort") (eq .Values.service.external.type "LoadBalancer")) .Values.service.external.nodePort }}
       nodePort: {{ .Values.service.external.nodePort }}
       {{- end }}
   selector:
-    {{- if eq .Values.architecture "standalone" }}
-    {{- include "valkey.standalone.selectorLabels" . | nindent 4 }}
-    {{- else }}
-    {{- include "valkey.master.selectorLabels" . | nindent 4 }}
-    {{- end }}
+    {{- include "valkey.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: master
 {{- end }}

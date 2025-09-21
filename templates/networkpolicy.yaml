@@ -1,4 +1,4 @@
-{{- if include "valkey.networkPolicy.enabled" . }}
+{{- if .Values.networkPolicy.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -19,43 +19,27 @@ spec:
       {{- include "valkey.selectorLabels" . | nindent 6 }}
   ingress:
     - ports:
-        {{- if eq .Values.architecture "standalone" }}
-        - port: {{ .Values.standalone.service.port }}
+        - port: 6379
           protocol: TCP
-        {{- else }}
-        - port: {{ .Values.master.service.port }}
-          protocol: TCP
-        {{- if .Values.replica.replicaCount | int }}
-        - port: {{ .Values.replica.service.port }}
-          protocol: TCP
-        {{- end }}
-        {{- if .Values.sentinel.enabled }}
-        - port: {{ .Values.sentinel.service.sentinelPort }}
-          protocol: TCP
-        {{- end }}
-        {{- end }}
-        {{- if .Values.metrics.enabled }}
-        - port: {{ .Values.metrics.service.port }}
-          protocol: TCP
-        {{- end }}
       {{- if not .Values.networkPolicy.allowExternal }}
       from:
         - podSelector:
             matchLabels:
-              {{ include "valkey.fullname" . }}-client: "true"
+              {{- include "valkey.selectorLabels" . | nindent 14 }}
         {{- if .Values.networkPolicy.ingressNSMatchLabels }}
         - namespaceSelector:
             matchLabels:
               {{- range $key, $value := .Values.networkPolicy.ingressNSMatchLabels }}
               {{ $key | quote }}: {{ $value | quote }}
               {{- end }}
-          {{- if .Values.networkPolicy.ingressNSPodMatchLabels }}
+        {{- end }}
+        {{- if .Values.networkPolicy.ingressNSPodMatchLabels }}
+        - namespaceSelector: {}
           podSelector:
             matchLabels:
               {{- range $key, $value := .Values.networkPolicy.ingressNSPodMatchLabels }}
               {{ $key | quote }}: {{ $value | quote }}
               {{- end }}
-          {{- end }}
         {{- end }}
       {{- end }}
   egress:
