@@ -74,10 +74,15 @@ jobs:
         with:
           version: v3.12.1
 
-      - name: Lint updated chart
+      - name: Validate updated chart
         if: env.latest_version != env.app_version
         run: |
           helm lint .
+          echo "Chart lint successful"
+
+          helm template test . > /dev/null
+          echo "Template generation successful"
+
           echo "Chart validation successful"
 
       # Step 7: Commit and push changes if there are updates
