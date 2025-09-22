@@ -24,7 +24,7 @@ spec:
         {{- with (include "valkey.annotations" .) }}
         {{- . | nindent 8 }}
         {{- end }}
-        checksum/config: {{ if eq .Values.architecture "sentinel" }}{{ include (print $.Template.BasePath "/master/configmap.yaml") . | sha256sum }}{{ else }}{{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}{{ end }}
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- if .Values.auth.enabled }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- end }}
