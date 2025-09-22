@@ -14,14 +14,13 @@ data:
   ping_readiness_local.sh: |-
     #!/bin/bash
 
-    [[ -f $VALKEY_PASSWORD_FILE ]] && export VALKEY_PASSWORD="$(< "${VALKEY_PASSWORD_FILE}")"
-    [[ -n "$VALKEY_PASSWORD" ]] && export VALKEYCLI_AUTH="$VALKEY_PASSWORD"
+    [[ -n "$VALKEY_PASSWORD" ]] && export REDISCLI_AUTH="$VALKEY_PASSWORD"
     response=$(
       timeout -s 15 $1 \
       valkey-cli \
         -h localhost \
-{{- if (include "valkey.tls.enabled" .) }}
-        -p $VALKEY_TLS_PORT \
+{{- if .Values.tls.enabled }}
+        -p {{ .Values.tls.port | default 6380 }} \
         --tls \
       {{- if .Values.tls.caCertFilename }}
         --cacert {{ include "valkey.tls.caCertFilename" . }} \
@@ -31,7 +30,7 @@ data:
         --key {{ include "valkey.tls.certKeyFilename" . }} \
       {{- end }}
 {{- else }}
-        -p $VALKEY_PORT \
+        -p 6379 \
 {{- end }}
         ping
     )
@@ -46,14 +45,13 @@ data:
   ping_liveness_local.sh: |-
     #!/bin/bash
 
-    [[ -f $VALKEY_PASSWORD_FILE ]] && export VALKEY_PASSWORD="$(< "${VALKEY_PASSWORD_FILE}")"
-    [[ -n "$VALKEY_PASSWORD" ]] && export VALKEYCLI_AUTH="$VALKEY_PASSWORD"
+    [[ -n "$VALKEY_PASSWORD" ]] && export REDISCLI_AUTH="$VALKEY_PASSWORD"
     response=$(
       timeout -s 15 $1 \
       valkey-cli \
         -h localhost \
-{{- if (include "valkey.tls.enabled" .) }}
-        -p $VALKEY_TLS_PORT \
+{{- if .Values.tls.enabled }}
+        -p {{ .Values.tls.port | default 6380 }} \
         --tls \
       {{- if .Values.tls.caCertFilename }}
         --cacert {{ include "valkey.tls.caCertFilename" . }} \
@@ -63,7 +61,7 @@ data:
         --key {{ include "valkey.tls.certKeyFilename" . }} \
       {{- end }}
 {{- else }}
-        -p $VALKEY_PORT \
+        -p 6379 \
 {{- end }}
         ping
     )
