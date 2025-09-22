@@ -241,6 +241,35 @@ helm install valkey-monitored . -f values.yaml
 helm install valkey-monitored valkey/valkey -f values.yaml
 ```
 
+### Ejemplo 5: Configuración para entorno de desarrollo
+
+```yaml
+# install.yaml
+architecture: standalone
+auth:
+  enabled: true
+  existingSecret: redis-secret
+  existingSecretPasswordKey: password
+standalone:
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: "longhorn-simple"
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+metrics:
+  enabled: true
+  podMonitor:
+    enabled: true
+```
+
+```bash
+# Instalación con configuración específica
+helm install valkey-dev valkey/valkey -f install.yaml -n development
+```
+
 ## Conectarse a Valkey
 
 ### Modo standalone
