@@ -162,7 +162,7 @@ spec:
                   name: {{ include "valkey.secretName" . }}
                   key: {{ include "valkey.secretPasswordKey" . }}
             {{- end }}
-            {{- if (include "valkey.tls.enabled" .) }}
+            {{- if and (include "valkey.tls.enabled" .) .Values.tls.enabled }}
             - name: REDIS_ADDR
               value: rediss://{{ .Values.metrics.redisTargetHost }}:{{ .Values.tls.port }}
             - name: REDIS_EXPORTER_TLS_CLIENT_KEY_FILE
