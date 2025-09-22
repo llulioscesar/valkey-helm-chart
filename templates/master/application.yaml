@@ -105,22 +105,22 @@ spec:
               containerPort: 6379
               protocol: TCP
           livenessProbe:
-            initialDelaySeconds: 20
-            periodSeconds: 5
+            initialDelaySeconds: 30
+            periodSeconds: 10
             timeoutSeconds: 5
             successThreshold: 1
-            failureThreshold: 5
+            failureThreshold: 3
             exec:
               command:
                 - sh
                 - -c
                 - /health/ping_liveness_local.sh 5
           readinessProbe:
-            initialDelaySeconds: 20
-            periodSeconds: 5
-            timeoutSeconds: 1
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
             successThreshold: 1
-            failureThreshold: 5
+            failureThreshold: 3
             exec:
               command:
                 - sh
