@@ -437,7 +437,7 @@ metrics:
   image:
     registry: docker.io
     repository: oliver006/redis_exporter
-    tag: "v1.45.0"
+    tag: "v1.77.0"
     pullPolicy: IfNotPresent
 
   containerSecurityContext:
@@ -456,6 +456,11 @@ metrics:
     requests:
       cpu: 100m
       memory: 128Mi
+
+  redisTargetHost: "localhost"
+
+  containerPorts:
+    http: 9121
 
   extraArgs: {}
 

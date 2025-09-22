@@ -150,18 +150,32 @@ spec:
           image: {{ include "valkey.metrics.image" . }}
           imagePullPolicy: {{ .Values.metrics.image.pullPolicy }}
           env:
-            - name: REDIS_ADDR
-              value: "redis://127.0.0.1:6379"
+            - name: REDIS_ALIAS
+              value: {{ include "valkey.fullname" . }}
+            - name: REDIS_EXPORTER_WEB_LISTEN_ADDRESS
+              value: {{ printf ":%v" .Values.metrics.containerPorts.http }}
             {{- if .Values.auth.enabled }}
+            - name: REDIS_USER
+              value: default
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ include "valkey.secretName" . }}
                   key: {{ include "valkey.secretPasswordKey" . }}
             {{- end }}
+            {{- if (include "valkey.tls.enabled" .) }}
+            - name: REDIS_ADDR
+              value: rediss://{{ .Values.metrics.redisTargetHost }}:{{ .Values.tls.port }}
+            - name: REDIS_EXPORTER_TLS_CLIENT_KEY_FILE
+              value: {{ include "valkey.tls.certKeyFilename" . }}
+            - name: REDIS_EXPORTER_TLS_CLIENT_CERT_FILE
+              value: {{ include "valkey.tls.certFilename" . }}
+            - name: REDIS_EXPORTER_TLS_CA_CERT_FILE
+              value: {{ include "valkey.tls.caCertFilename" . }}
+            {{- end }}
           ports:
             - name: http-metrics
-              containerPort: 9121
+              containerPort: {{ .Values.metrics.containerPorts.http }}
               protocol: TCP
           livenessProbe:
             httpGet:
