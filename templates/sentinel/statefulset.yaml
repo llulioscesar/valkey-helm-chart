@@ -66,13 +66,10 @@ spec:
           securityContext: {{- omit .Values.sentinel.containerSecurityContext "enabled" | toYaml | nindent 12 }}
           {{- end }}
           command:
-            - /bin/bash
+            - valkey-sentinel
           args:
-            - -c
-            - /opt/bitnami/scripts/start-scripts/start-sentinel.sh
+            - /etc/valkey/sentinel.conf
           env:
-            - name: BITNAMI_DEBUG
-              value: {{ ternary "true" "false" (or .Values.image.debug .Values.diagnosticMode.enabled) | quote }}
             - name: VALKEY_SENTINEL_ENABLED
               value: "yes"
             - name: VALKEY_SENTINEL_PORT_NUMBER
@@ -177,11 +174,11 @@ spec:
               mountPath: /health
             {{- if (include "valkey.createConfigmap" .) }}
             - name: config
-              mountPath: /opt/bitnami/valkey/conf
+              mountPath: /etc/valkey
             {{- end }}
             {{- if (include "valkey.tls.enabled" .) }}
             - name: valkey-certificates
-              mountPath: /opt/bitnami/valkey/certs
+              mountPath: /etc/valkey/tls
               readOnly: true
             {{- end }}
             {{- with .Values.sentinel.extraVolumeMounts }}
@@ -220,11 +217,11 @@ spec:
             - name: REDIS_ADDR
               value: rediss://{{ include "valkey.fullname" . }}-master:{{ .Values.tls.port }}
             - name: REDIS_EXPORTER_TLS_CLIENT_KEY_FILE
-              value: {{ include "valkey.tls.certKeyFilename" . }}
+              value: /etc/valkey/tls/{{ include "valkey.tls.certKeyFilename" . }}
             - name: REDIS_EXPORTER_TLS_CLIENT_CERT_FILE
-              value: {{ include "valkey.tls.certFilename" . }}
+              value: /etc/valkey/tls/{{ include "valkey.tls.certFilename" . }}
             - name: REDIS_EXPORTER_TLS_CA_CERT_FILE
-              value: {{ include "valkey.tls.caCertFilename" . }}
+              value: /etc/valkey/tls/{{ include "valkey.tls.caCertFilename" . }}
             {{- else }}
             - name: REDIS_ADDR
               value: redis://{{ include "valkey.fullname" . }}-master:6379
@@ -244,7 +241,7 @@ spec:
             {{- end }}
             {{- if (include "valkey.tls.enabled" .) }}
             - name: valkey-certificates
-              mountPath: /opt/bitnami/valkey/certs
+              mountPath: /etc/valkey/tls
               readOnly: true
             {{- end }}
         {{- end }}

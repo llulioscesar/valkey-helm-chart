@@ -45,8 +45,7 @@ spec:
             - /bin/sh
             - -c
             - |
-              install_packages procps
-              sysctl -w net.core.somaxconn=65535
+              sysctl -w net.core.somaxconn=65535 || true
           securityContext:
             privileged: true
             runAsUser: 0
@@ -86,11 +85,11 @@ spec:
               {{- if .Values.auth.enabled }}
               export REDISCLI_AUTH="$VALKEY_PASSWORD"
               # Copy config and add requirepass
-              cp /opt/valkey/etc/valkey.conf /tmp/valkey.conf
+              cp /etc/valkey/valkey.conf /tmp/valkey.conf
               echo "requirepass $VALKEY_PASSWORD" >> /tmp/valkey.conf
               valkey-server /tmp/valkey.conf
               {{- else }}
-              valkey-server /opt/valkey/etc/valkey.conf
+              valkey-server /etc/valkey/valkey.conf
               {{- end }}
           env:
             {{- if .Values.auth.enabled }}
@@ -167,11 +166,11 @@ spec:
             - name: REDIS_ADDR
               value: rediss://{{ .Values.metrics.redisTargetHost }}:{{ .Values.tls.port }}
             - name: REDIS_EXPORTER_TLS_CLIENT_KEY_FILE
-              value: {{ include "valkey.tls.certKeyFilename" . }}
+              value: /etc/valkey/tls/{{ include "valkey.tls.certKeyFilename" . }}
             - name: REDIS_EXPORTER_TLS_CLIENT_CERT_FILE
-              value: {{ include "valkey.tls.certFilename" . }}
+              value: /etc/valkey/tls/{{ include "valkey.tls.certFilename" . }}
             - name: REDIS_EXPORTER_TLS_CA_CERT_FILE
-              value: {{ include "valkey.tls.caCertFilename" . }}
+              value: /etc/valkey/tls/{{ include "valkey.tls.caCertFilename" . }}
             {{- end }}
           ports:
             - name: http-metrics

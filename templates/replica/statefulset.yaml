@@ -92,17 +92,19 @@ spec:
           securityContext: {{- omit .Values.replica.containerSecurityContext "enabled" | toYaml | nindent 12 }}
           {{- end }}
           command:
-            - /bin/bash
+            - valkey-server
           args:
-            - -c
-            - /opt/bitnami/scripts/start-scripts/start-replica.sh
+            - /etc/valkey/replica.conf
+            - --replicaof
+            - "$(VALKEY_MASTER_HOST)"
+            - "$(VALKEY_MASTER_PORT)"
           env:
-            - name: BITNAMI_DEBUG
-              value: {{ ternary "true" "false" (or .Values.image.debug .Values.diagnosticMode.enabled) | quote }}
-            - name: VALKEY_REPLICATION_MODE
-              value: replica
             - name: VALKEY_MASTER_HOST
               value: {{ include "valkey.master.serviceName" . }}
+            - name: VALKEY_MASTER_PORT
+              value: {{ include "valkey.port" . | quote }}
+            - name: VALKEY_REPLICATION_MODE
+              value: replica
             - name: VALKEY_MASTER_PORT_NUMBER
               value: {{ include "valkey.port" . | quote }}
             - name: VALKEY_PORT
@@ -191,7 +193,7 @@ spec:
               mountPath: /health
             {{- if (include "valkey.createConfigmap" .) }}
             - name: config
-              mountPath: /opt/bitnami/valkey/conf
+              mountPath: /etc/valkey
             {{- end }}
             - name: valkey-data
               mountPath: /data
@@ -200,7 +202,7 @@ spec:
               {{- end }}
             {{- if (include "valkey.tls.enabled" .) }}
             - name: valkey-certificates
-              mountPath: /opt/bitnami/valkey/certs
+              mountPath: /etc/valkey/tls
               readOnly: true
             {{- end }}
             {{- with .Values.replica.extraVolumeMounts }}
@@ -239,11 +241,11 @@ spec:
             - name: REDIS_ADDR
               value: rediss://{{ .Values.metrics.redisTargetHost }}:{{ .Values.tls.port }}
             - name: REDIS_EXPORTER_TLS_CLIENT_KEY_FILE
-              value: {{ include "valkey.tls.certKeyFilename" . }}
+              value: /etc/valkey/tls/{{ include "valkey.tls.certKeyFilename" . }}
             - name: REDIS_EXPORTER_TLS_CLIENT_CERT_FILE
-              value: {{ include "valkey.tls.certFilename" . }}
+              value: /etc/valkey/tls/{{ include "valkey.tls.certFilename" . }}
             - name: REDIS_EXPORTER_TLS_CA_CERT_FILE
-              value: {{ include "valkey.tls.caCertFilename" . }}
+              value: /etc/valkey/tls/{{ include "valkey.tls.caCertFilename" . }}
             {{- end }}
           ports:
             - name: http-metrics
@@ -259,7 +261,7 @@ spec:
             {{- end }}
             {{- if (include "valkey.tls.enabled" .) }}
             - name: valkey-certificates
-              mountPath: /opt/bitnami/valkey/certs
+              mountPath: /etc/valkey/tls
               readOnly: true
             {{- end }}
         {{- end }}
