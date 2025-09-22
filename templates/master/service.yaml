@@ -22,9 +22,9 @@ spec:
       name: valkey
     {{- if .Values.metrics.enabled }}
     - port: {{ .Values.metrics.service.port }}
-      targetPort: metrics
+      targetPort: http-metrics
       protocol: TCP
-      name: metrics
+      name: http-metrics
     {{- end }}
   selector:
     {{- include "valkey.master.selectorLabels" . | nindent 4 }}
