@@ -187,6 +187,67 @@ spec:
             {{- with .Values.sentinel.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+        {{- if .Values.metrics.enabled }}
+        - name: metrics
+          image: {{ include "valkey.metrics.image" . }}
+          imagePullPolicy: {{ .Values.metrics.image.pullPolicy | quote }}
+          {{- if .Values.metrics.containerSecurityContext.enabled }}
+          securityContext: {{- omit .Values.metrics.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              if [[ -f '/secrets/valkey-password' ]]; then
+                export REDIS_PASSWORD=$(cat /secrets/valkey-password)
+              fi
+              redis_exporter{{- range $key, $value := .Values.metrics.extraArgs }} --{{ $key }}={{ $value }}{{- end }}
+          env:
+            - name: REDIS_ALIAS
+              value: {{ include "valkey.fullname" . }}
+            - name: REDIS_EXPORTER_WEB_LISTEN_ADDRESS
+              value: {{ printf ":%v" .Values.metrics.containerPorts.http }}
+            {{- if (include "valkey.auth.enabled" .) }}
+            - name: REDIS_USER
+              value: default
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "valkey.secretName" . }}
+                  key: {{ include "valkey.secretPasswordKey" . }}
+            {{- end }}
+            {{- if (include "valkey.tls.enabled" .) }}
+            - name: REDIS_ADDR
+              value: rediss://{{ include "valkey.fullname" . }}-master:{{ .Values.tls.port }}
+            - name: REDIS_EXPORTER_TLS_CLIENT_KEY_FILE
+              value: {{ include "valkey.tls.certKeyFilename" . }}
+            - name: REDIS_EXPORTER_TLS_CLIENT_CERT_FILE
+              value: {{ include "valkey.tls.certFilename" . }}
+            - name: REDIS_EXPORTER_TLS_CA_CERT_FILE
+              value: {{ include "valkey.tls.caCertFilename" . }}
+            {{- else }}
+            - name: REDIS_ADDR
+              value: redis://{{ include "valkey.fullname" . }}-master:6379
+            {{- end }}
+          ports:
+            - name: http-metrics
+              containerPort: {{ .Values.metrics.containerPorts.http }}
+              protocol: TCP
+          {{- if .Values.metrics.resources }}
+          resources: {{- toYaml .Values.metrics.resources | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- if (include "valkey.auth.enabled" .) }}
+            - name: valkey-password
+              mountPath: /secrets
+              readOnly: true
+            {{- end }}
+            {{- if (include "valkey.tls.enabled" .) }}
+            - name: valkey-certificates
+              mountPath: /opt/bitnami/valkey/certs
+              readOnly: true
+            {{- end }}
+        {{- end }}
         {{- with .Values.sentinel.sidecars }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
