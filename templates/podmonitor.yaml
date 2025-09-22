@@ -7,8 +7,8 @@ metadata:
   labels:
     {{- include "valkey.labels" . | nindent 4 }}
     app.kubernetes.io/component: metrics
-    {{- range $key, $value := .Values.metrics.podMonitor.selector }}
-    {{ $key }}: {{ $value | quote }}
+    {{- if .Values.metrics.podMonitor.additionalLabels }}
+    {{- toYaml .Values.metrics.podMonitor.additionalLabels | nindent 4 }}
     {{- end }}
   {{- if or .Values.metrics.podMonitor.annotations .Values.commonAnnotations }}
   annotations:
@@ -26,9 +26,6 @@ spec:
   selector:
     matchLabels:
       {{- include "valkey.selectorLabels" . | nindent 6 }}
-      {{- with .Values.metrics.podMonitor.selector }}
-      {{- toYaml . | nindent 6 }}
-      {{- end }}
   podMetricsEndpoints:
     - port: http-metrics
       {{- if .Values.metrics.podMonitor.interval }}
@@ -46,6 +43,45 @@ spec:
       {{- if .Values.metrics.podMonitor.relabelings }}
       relabelings: {{- toYaml .Values.metrics.podMonitor.relabelings | nindent 8 }}
       {{- end }}
+    {{- range .Values.metrics.podMonitor.additionalEndpoints }}
+    - port: {{ .port }}
+      {{- if .interval }}
+      interval: {{ .interval }}
+      {{- end }}
+      {{- if .path }}
+      path: {{ .path }}
+      {{- end }}
+      {{- if .honorLabels }}
+      honorLabels: {{ .honorLabels }}
+      {{- end }}
+      {{- if .relabelings }}
+      relabelings: {{- toYaml .relabelings | nindent 8 }}
+      {{- end }}
+      {{- if .metricRelabelings }}
+      metricRelabelings: {{- toYaml .metricRelabelings | nindent 8 }}
+      {{- end }}
+      {{- if .scrapeTimeout }}
+      scrapeTimeout: {{ .scrapeTimeout }}
+      {{- end }}
+      {{- if .params }}
+      params:
+        {{- range $key, $value := .params }}
+        {{ $key }}:
+          {{- range $value }}
+          - {{ . | quote }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- if .Values.metrics.podMonitor.podTargetLabels }}
+  podTargetLabels: {{- toYaml .Values.metrics.podMonitor.podTargetLabels | nindent 4 }}
+  {{- end }}
+  {{- with .Values.metrics.podMonitor.sampleLimit }}
+  sampleLimit: {{ . }}
+  {{- end }}
+  {{- with .Values.metrics.podMonitor.targetLimit }}
+  targetLimit: {{ . }}
+  {{- end }}
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace | quote }}

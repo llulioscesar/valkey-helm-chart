@@ -464,6 +464,10 @@ metrics:
 
   extraArgs: {}
 
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9121"
+
   service:
     type: ClusterIP
     port: 9121
@@ -486,9 +490,13 @@ metrics:
     honorLabels: false
     metricRelabelings: []
     relabelings: []
-    selector: {}
     annotations: {}
     jobLabel: ""
+    additionalLabels: {}
+    podTargetLabels: []
+    sampleLimit: false
+    targetLimit: false
+    additionalEndpoints: []
 
   podMonitor:
     enabled: false
@@ -498,9 +506,13 @@ metrics:
     honorLabels: false
     metricRelabelings: []
     relabelings: []
-    selector: {}
     annotations: {}
     jobLabel: ""
+    additionalLabels: {}
+    podTargetLabels: []
+    sampleLimit: false
+    targetLimit: false
+    additionalEndpoints: []
 
   prometheusRule:
     enabled: false

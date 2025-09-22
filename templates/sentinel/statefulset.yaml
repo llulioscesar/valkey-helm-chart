@@ -31,6 +31,9 @@ spec:
         {{- with .Values.commonAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+        {{- if and .Values.metrics.enabled .Values.metrics.podAnnotations }}
+        {{- toYaml .Values.metrics.podAnnotations | nindent 8 }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "valkey.sentinel.serviceAccountName" . }}
       {{- if .Values.sentinel.priorityClassName }}
