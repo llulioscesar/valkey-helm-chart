@@ -20,14 +20,17 @@ spec:
     metadata:
       labels:
         {{- include "valkey.master.selectorLabels" . | nindent 8 }}
-      {{- with (include "valkey.annotations" .) }}
       annotations:
+        {{- with (include "valkey.annotations" .) }}
         {{- . | nindent 8 }}
+        {{- end }}
         checksum/config: {{ if eq .Values.architecture "sentinel" }}{{ include (print $.Template.BasePath "/master/configmap.yaml") . | sha256sum }}{{ else }}{{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}{{ end }}
         {{- if .Values.auth.enabled }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- end }}
-      {{- end }}
+        {{- if and .Values.metrics.enabled .Values.metrics.podAnnotations }}
+        {{- toYaml .Values.metrics.podAnnotations | nindent 8 }}
+        {{- end }}
     spec:
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
