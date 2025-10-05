@@ -2,12 +2,12 @@ apiVersion: v2
 name: valkey
 description: Valkey is an open source, high-performance data structure server compatible with Redis. It supports strings, hashes, lists, sets, and sorted sets.
 type: application
-version: 0.1.21
-appVersion: "8.1.3"
+version: 0.1.22
+appVersion: "8.1.4"
 annotations:
   images: |
     - name: valkey
-      image: docker.io/valkey/valkey:8.1.3
+      image: docker.io/valkey/valkey:8.1.4
     - name: os-shell
       image: docker.io/alpine:3.19
     - name: redis-exporter

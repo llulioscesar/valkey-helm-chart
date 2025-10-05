@@ -15,7 +15,7 @@ clusterDomain: cluster.local
 image:
   registry: docker.io
   repository: valkey/valkey
-  tag: "8.1.3"
+  tag: "8.1.4"
   pullPolicy: IfNotPresent
 
 # Common configuration
@@ -131,7 +131,7 @@ sentinel:
   image:
     registry: docker.io
     repository: valkey/valkey
-    tag: "8.1.3"
+    tag: "8.1.4"
     pullPolicy: IfNotPresent
 
   serviceAccount:
