@@ -13,6 +13,10 @@ metadata:
 spec:
   replicas: {{ .Values.replica.replicaCount }}
   serviceName: {{ include "valkey.headless.serviceName" . }}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
   selector:
     matchLabels:
       {{- include "valkey.replica.selectorLabels" . | nindent 6 }}

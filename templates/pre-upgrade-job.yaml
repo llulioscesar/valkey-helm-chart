@@ -1,0 +1,136 @@
+{{- if .Release.IsUpgrade }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "valkey.fullname" . }}-pre-upgrade
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pre-upgrade-hook
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      name: {{ include "valkey.fullname" . }}-pre-upgrade
+      labels:
+        {{- include "valkey.labels" . | nindent 8 }}
+        app.kubernetes.io/component: pre-upgrade-hook
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "valkey.fullname" . }}-pre-upgrade
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+        - name: pre-upgrade
+          image: {{ .Values.preUpgradeHook.image.registry }}/{{ .Values.preUpgradeHook.image.repository }}:{{ .Values.preUpgradeHook.image.tag }}
+          imagePullPolicy: {{ .Values.preUpgradeHook.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "=== Valkey Pre-Upgrade Hook ==="
+              echo "Checking for existing StatefulSets to clean up..."
+
+              NAMESPACE="{{ .Release.Namespace }}"
+
+              # Lista de StatefulSets a verificar según la arquitectura
+              STATEFULSETS=""
+
+              {{- if or (eq .Values.architecture "standalone") (eq .Values.architecture "sentinel") }}
+              # Master/Standalone StatefulSet
+              {{- if eq .Values.architecture "sentinel" }}
+              STATEFULSETS="${STATEFULSETS} {{ include "valkey.fullname" . }}-master"
+              {{- else }}
+              STATEFULSETS="${STATEFULSETS} {{ include "valkey.fullname" . }}"
+              {{- end }}
+              {{- end }}
+
+              {{- if eq .Values.architecture "sentinel" }}
+              # Replica StatefulSet
+              STATEFULSETS="${STATEFULSETS} {{ include "valkey.fullname" . }}-replica"
+              # Sentinel StatefulSet
+              STATEFULSETS="${STATEFULSETS} {{ include "valkey.fullname" . }}-sentinel"
+              {{- end }}
+
+              for STS_NAME in ${STATEFULSETS}; do
+                if kubectl get statefulset "${STS_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
+                  echo "Found StatefulSet: ${STS_NAME}"
+                  echo "Deleting StatefulSet ${STS_NAME} with --cascade=orphan to preserve pods and PVCs..."
+                  kubectl delete statefulset "${STS_NAME}" -n "${NAMESPACE}" --cascade=orphan
+                  echo "StatefulSet ${STS_NAME} deleted successfully (pods and PVCs preserved)"
+                else
+                  echo "StatefulSet ${STS_NAME} not found, skipping..."
+                fi
+              done
+
+              echo "=== Pre-upgrade cleanup completed successfully ==="
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+          {{- if .Values.preUpgradeHook.resources }}
+          resources: {{- toYaml .Values.preUpgradeHook.resources | nindent 12 }}
+          {{- end }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "valkey.fullname" . }}-pre-upgrade
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pre-upgrade-hook
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "valkey.fullname" . }}-pre-upgrade
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pre-upgrade-hook
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "valkey.fullname" . }}-pre-upgrade
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "valkey.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pre-upgrade-hook
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "valkey.fullname" . }}-pre-upgrade
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "valkey.fullname" . }}-pre-upgrade
+    namespace: {{ .Release.Namespace | quote }}
+{{- end }}

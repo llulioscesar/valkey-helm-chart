@@ -13,6 +13,7 @@ Un Helm chart para desplegar Valkey en Kubernetes con soporte para modos standal
 - ✅ Configuración de seguridad
 - ✅ Init containers para permisos de volumen
 - ✅ Soporte para múltiples storage classes
+- ✅ Actualizaciones automáticas transparentes con pre-upgrade hooks
 
 ## Instalación
 
@@ -292,6 +293,68 @@ kubectl run valkey-client --rm -it --image=valkey/valkey -- valkey-cli -h <relea
 # sentinel masters
 # sentinel get-master-addr-by-name mymaster
 ```
+
+## Actualización del Chart
+
+Este chart incluye un mecanismo automático de actualización que maneja los StatefulSets de forma transparente.
+
+### Proceso de actualización automática
+
+Cuando actualizas el chart a una nueva versión, el sistema realiza automáticamente:
+
+1. **Pre-upgrade Hook**: Antes de la actualización, se ejecuta un Job que elimina los StatefulSets existentes usando `--cascade=orphan`, preservando:
+   - Los pods en ejecución
+   - Los PersistentVolumeClaims (PVCs) con los datos
+   - La disponibilidad del servicio
+
+2. **Recreación de StatefulSets**: Helm recrea los StatefulSets con la nueva configuración
+
+3. **Rolling Update**: Los pods se actualizan uno por uno (RollingUpdate) minimizando el tiempo de inactividad
+
+### Cómo actualizar
+
+```bash
+# Actualizar desde repositorio
+helm repo update
+helm upgrade valkey-standalone valkey/valkey
+
+# Actualizar con nuevos valores
+helm upgrade valkey-standalone valkey/valkey -f new-values.yaml
+
+# Actualizar instalación local
+helm upgrade valkey-standalone .
+
+# Actualizar con cambio de versión de imagen
+helm upgrade valkey-standalone valkey/valkey \
+  --set image.tag=8.1.4
+```
+
+### Configuración del hook de actualización
+
+El hook de pre-upgrade se puede personalizar en `values.yaml`:
+
+```yaml
+preUpgradeHook:
+  image:
+    registry: docker.io
+    repository: alpine/k8s  # Imagen Alpine con kubectl - gratuita y mantenida
+    tag: "1.31.4"
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+```
+
+### Notas importantes sobre actualizaciones
+
+- Los datos en los PVCs se preservan durante las actualizaciones
+- El proceso es completamente automático y transparente
+- Los pods se actualizan gradualmente (uno a la vez) para mantener disponibilidad
+- El hook solo se ejecuta durante upgrades, no en instalaciones nuevas
+- Se requiere RBAC habilitado en el cluster (habilitado por defecto en la mayoría de clusters)
 
 ## Desinstalación
 
