@@ -15,7 +15,7 @@ clusterDomain: cluster.local
 image:
   registry: docker.io
   repository: valkey/valkey
-  tag: "8.1.4"
+  tag: "9.0.0"
   pullPolicy: IfNotPresent
 
 # Common configuration
@@ -131,7 +131,7 @@ sentinel:
   image:
     registry: docker.io
     repository: valkey/valkey
-    tag: "8.1.4"
+    tag: "9.0.0"
     pullPolicy: IfNotPresent
 
   serviceAccount:
@@ -437,7 +437,7 @@ metrics:
   image:
     registry: docker.io
     repository: oliver006/redis_exporter
-    tag: "v1.77.0"
+    tag: "v1.80.0"
     pullPolicy: IfNotPresent
 
   containerSecurityContext:
@@ -521,13 +521,30 @@ metrics:
     annotations: {}
     rules: []
 
+# Pre-upgrade hook configuration
+# Uses Alpine with kubectl binary from official Kubernetes releases
+# This avoids paid/deprecated Bitnami images
+preUpgradeHook:
+  image:
+    registry: docker.io
+    repository: alpine/k8s
+    tag: "1.31.13"
+    pullPolicy: IfNotPresent
+
+  resources:
+    limits:
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
 # Init containers for volume permissions
 volumePermissions:
   enabled: false
   image:
     registry: docker.io
     repository: alpine
-    tag: "3.19"
+    tag: "3.22.2"
     pullPolicy: IfNotPresent
 
   containerSecurityContext:

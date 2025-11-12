@@ -13,6 +13,10 @@ metadata:
 spec:
   serviceName: {{ include "valkey.master.serviceName" . }}
   replicas: {{ if eq .Values.architecture "sentinel" }}{{ .Values.master.replicaCount }}{{ else }}{{ .Values.standalone.replicaCount }}{{ end }}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
   selector:
     matchLabels:
       {{- include "valkey.master.selectorLabels" . | nindent 6 }}
