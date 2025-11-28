@@ -1,6 +1,6 @@
 # Valkey Helm Chart
 
-[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/valkey)](https://artifacthub.io/packages/helm/valkey/valkey)
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/valkey-redis)](https://artifacthub.io/packages/helm/valkey-redis/valkey)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Helm](https://img.shields.io/badge/Helm-3.x-blue)](https://helm.sh)
 
