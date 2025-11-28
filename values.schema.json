@@ -1,0 +1,799 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Valkey Helm Chart Values",
+  "type": "object",
+  "properties": {
+    "architecture": {
+      "type": "string",
+      "description": "Deployment architecture: standalone or sentinel",
+      "enum": ["standalone", "sentinel"],
+      "default": "standalone"
+    },
+    "global": {
+      "type": "object",
+      "description": "Global parameters",
+      "properties": {
+        "imageRegistry": {
+          "type": "string",
+          "description": "Global Docker image registry"
+        },
+        "imagePullSecrets": {
+          "type": "array",
+          "description": "Global Docker registry secret names",
+          "items": {
+            "type": "string"
+          }
+        },
+        "storageClass": {
+          "type": "string",
+          "description": "Global StorageClass for Persistent Volume(s)"
+        }
+      }
+    },
+    "clusterDomain": {
+      "type": "string",
+      "description": "Kubernetes cluster domain",
+      "default": "cluster.local"
+    },
+    "image": {
+      "type": "object",
+      "description": "Valkey image configuration",
+      "properties": {
+        "registry": {
+          "type": "string",
+          "description": "Image registry",
+          "default": "docker.io"
+        },
+        "repository": {
+          "type": "string",
+          "description": "Image repository",
+          "default": "valkey/valkey"
+        },
+        "tag": {
+          "type": "string",
+          "description": "Image tag",
+          "default": "9.0.0"
+        },
+        "pullPolicy": {
+          "type": "string",
+          "description": "Image pull policy",
+          "enum": ["Always", "IfNotPresent", "Never"],
+          "default": "IfNotPresent"
+        }
+      }
+    },
+    "nameOverride": {
+      "type": "string",
+      "description": "String to partially override fullname template"
+    },
+    "fullnameOverride": {
+      "type": "string",
+      "description": "String to fully override fullname template"
+    },
+    "auth": {
+      "type": "object",
+      "description": "Authentication configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable password authentication",
+          "default": false
+        },
+        "password": {
+          "type": "string",
+          "description": "Valkey password (not recommended for production)"
+        },
+        "existingSecret": {
+          "type": "string",
+          "description": "Name of existing secret containing the password"
+        },
+        "existingSecretPasswordKey": {
+          "type": "string",
+          "description": "Key in existing secret containing the password",
+          "default": "password"
+        },
+        "sentinel": {
+          "type": "boolean",
+          "description": "Enable authentication for Sentinel",
+          "default": false
+        }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "description": "Network Policy configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable NetworkPolicy",
+          "default": false
+        },
+        "allowExternal": {
+          "type": "boolean",
+          "description": "Allow external connections",
+          "default": true
+        },
+        "ingressNSMatchLabels": {
+          "type": "object",
+          "description": "Namespace labels for ingress rules"
+        },
+        "ingressNSPodMatchLabels": {
+          "type": "object",
+          "description": "Pod labels for ingress rules"
+        }
+      }
+    },
+    "rbac": {
+      "type": "object",
+      "description": "RBAC configuration",
+      "properties": {
+        "create": {
+          "type": "boolean",
+          "description": "Create RBAC resources",
+          "default": false
+        }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "description": "Service Account configuration",
+      "properties": {
+        "create": {
+          "type": "boolean",
+          "description": "Create ServiceAccount",
+          "default": true
+        },
+        "annotations": {
+          "type": "object",
+          "description": "ServiceAccount annotations"
+        },
+        "name": {
+          "type": "string",
+          "description": "ServiceAccount name"
+        }
+      }
+    },
+    "podSecurityContext": {
+      "type": "object",
+      "description": "Pod Security Context",
+      "properties": {
+        "fsGroup": {
+          "type": "integer",
+          "description": "Group ID for the filesystem",
+          "default": 999
+        },
+        "runAsUser": {
+          "type": "integer",
+          "description": "User ID for the container",
+          "default": 999
+        },
+        "runAsGroup": {
+          "type": "integer",
+          "description": "Group ID for the container",
+          "default": 999
+        }
+      }
+    },
+    "securityContext": {
+      "type": "object",
+      "description": "Container Security Context",
+      "properties": {
+        "allowPrivilegeEscalation": {
+          "type": "boolean",
+          "description": "Allow privilege escalation",
+          "default": false
+        },
+        "capabilities": {
+          "type": "object",
+          "description": "Linux capabilities",
+          "properties": {
+            "drop": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "readOnlyRootFilesystem": {
+          "type": "boolean",
+          "description": "Read-only root filesystem",
+          "default": true
+        },
+        "runAsNonRoot": {
+          "type": "boolean",
+          "description": "Run as non-root user",
+          "default": true
+        },
+        "runAsUser": {
+          "type": "integer",
+          "description": "User ID for the container",
+          "default": 999
+        }
+      }
+    },
+    "commonAnnotations": {
+      "type": "object",
+      "description": "Annotations to add to all deployed objects"
+    },
+    "commonLabels": {
+      "type": "object",
+      "description": "Labels to add to all deployed objects"
+    },
+    "standalone": {
+      "type": "object",
+      "description": "Standalone mode configuration",
+      "properties": {
+        "replicaCount": {
+          "type": "integer",
+          "description": "Number of replicas",
+          "default": 1,
+          "minimum": 1
+        },
+        "resources": {
+          "type": "object",
+          "description": "Container resources",
+          "properties": {
+            "limits": {
+              "type": "object",
+              "properties": {
+                "memory": {
+                  "type": "string"
+                },
+                "cpu": {
+                  "type": "string"
+                }
+              }
+            },
+            "requests": {
+              "type": "object",
+              "properties": {
+                "memory": {
+                  "type": "string"
+                },
+                "cpu": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "nodeSelector": {
+          "type": "object",
+          "description": "Node labels for pod assignment"
+        },
+        "tolerations": {
+          "type": "array",
+          "description": "Tolerations for pod assignment",
+          "items": {
+            "type": "object"
+          }
+        },
+        "affinity": {
+          "type": "object",
+          "description": "Affinity for pod assignment"
+        },
+        "persistence": {
+          "type": "object",
+          "description": "Persistence configuration",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable persistence",
+              "default": true
+            },
+            "storageClass": {
+              "type": "string",
+              "description": "StorageClass for PVC"
+            },
+            "accessModes": {
+              "type": "array",
+              "description": "PVC access modes",
+              "items": {
+                "type": "string",
+                "enum": ["ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany"]
+              },
+              "default": ["ReadWriteOnce"]
+            },
+            "size": {
+              "type": "string",
+              "description": "PVC size",
+              "default": "8Gi"
+            },
+            "annotations": {
+              "type": "object",
+              "description": "PVC annotations"
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "description": "Service configuration",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Service type",
+              "enum": ["ClusterIP", "NodePort", "LoadBalancer"],
+              "default": "ClusterIP"
+            },
+            "port": {
+              "type": "integer",
+              "description": "Service port",
+              "default": 6379
+            },
+            "targetPort": {
+              "type": "string",
+              "description": "Target port name",
+              "default": "valkey"
+            },
+            "annotations": {
+              "type": "object",
+              "description": "Service annotations"
+            }
+          }
+        },
+        "configuration": {
+          "type": "string",
+          "description": "Valkey configuration file content"
+        }
+      }
+    },
+    "sentinel": {
+      "type": "object",
+      "description": "Sentinel configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable Sentinel",
+          "default": false
+        },
+        "replicaCount": {
+          "type": "integer",
+          "description": "Number of Sentinel replicas",
+          "default": 3,
+          "minimum": 1
+        },
+        "quorum": {
+          "type": "integer",
+          "description": "Quorum for Sentinel",
+          "default": 2,
+          "minimum": 1
+        },
+        "masterSet": {
+          "type": "string",
+          "description": "Name of the master set",
+          "default": "mymaster"
+        },
+        "downAfterMilliseconds": {
+          "type": "integer",
+          "description": "Time in ms to consider a master down",
+          "default": 30000
+        },
+        "failoverTimeout": {
+          "type": "integer",
+          "description": "Failover timeout in ms",
+          "default": 180000
+        },
+        "parallelSyncs": {
+          "type": "integer",
+          "description": "Number of replicas to sync in parallel",
+          "default": 1
+        },
+        "image": {
+          "type": "object",
+          "description": "Sentinel image configuration",
+          "properties": {
+            "registry": {
+              "type": "string"
+            },
+            "repository": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": ["Always", "IfNotPresent", "Never"]
+            }
+          }
+        },
+        "resources": {
+          "type": "object",
+          "description": "Container resources"
+        },
+        "service": {
+          "type": "object",
+          "description": "Sentinel service configuration",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["ClusterIP", "NodePort", "LoadBalancer"]
+            },
+            "port": {
+              "type": "integer",
+              "default": 26379
+            }
+          }
+        }
+      }
+    },
+    "master": {
+      "type": "object",
+      "description": "Master configuration (sentinel mode)",
+      "properties": {
+        "replicaCount": {
+          "type": "integer",
+          "description": "Number of master replicas",
+          "default": 1
+        },
+        "resources": {
+          "type": "object",
+          "description": "Container resources"
+        },
+        "persistence": {
+          "type": "object",
+          "description": "Persistence configuration",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "storageClass": {
+              "type": "string"
+            },
+            "accessModes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "size": {
+              "type": "string",
+              "default": "8Gi"
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "description": "Service configuration"
+        }
+      }
+    },
+    "replica": {
+      "type": "object",
+      "description": "Replica configuration (sentinel mode)",
+      "properties": {
+        "replicaCount": {
+          "type": "integer",
+          "description": "Number of replica instances",
+          "default": 2,
+          "minimum": 0
+        },
+        "resources": {
+          "type": "object",
+          "description": "Container resources"
+        },
+        "persistence": {
+          "type": "object",
+          "description": "Persistence configuration",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "storageClass": {
+              "type": "string"
+            },
+            "accessModes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "size": {
+              "type": "string",
+              "default": "8Gi"
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "description": "Service configuration"
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Metrics exporter configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable Prometheus metrics exporter",
+          "default": false
+        },
+        "port": {
+          "type": "integer",
+          "description": "Metrics port",
+          "default": 9121
+        },
+        "image": {
+          "type": "object",
+          "description": "Metrics exporter image",
+          "properties": {
+            "registry": {
+              "type": "string",
+              "default": "docker.io"
+            },
+            "repository": {
+              "type": "string",
+              "default": "oliver006/redis_exporter"
+            },
+            "tag": {
+              "type": "string",
+              "default": "v1.80.0"
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": ["Always", "IfNotPresent", "Never"]
+            }
+          }
+        },
+        "resources": {
+          "type": "object",
+          "description": "Container resources"
+        },
+        "serviceMonitor": {
+          "type": "object",
+          "description": "Prometheus ServiceMonitor configuration",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Create ServiceMonitor",
+              "default": false
+            },
+            "namespace": {
+              "type": "string",
+              "description": "ServiceMonitor namespace"
+            },
+            "interval": {
+              "type": "string",
+              "description": "Scrape interval"
+            },
+            "scrapeTimeout": {
+              "type": "string",
+              "description": "Scrape timeout"
+            }
+          }
+        },
+        "podMonitor": {
+          "type": "object",
+          "description": "Prometheus PodMonitor configuration",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Create PodMonitor",
+              "default": false
+            }
+          }
+        },
+        "prometheusRule": {
+          "type": "object",
+          "description": "Prometheus PrometheusRule configuration",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Create PrometheusRule",
+              "default": false
+            },
+            "rules": {
+              "type": "array",
+              "description": "Prometheus rules",
+              "items": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "preUpgradeHook": {
+      "type": "object",
+      "description": "Pre-upgrade hook configuration",
+      "properties": {
+        "image": {
+          "type": "object",
+          "description": "Hook image configuration",
+          "properties": {
+            "registry": {
+              "type": "string",
+              "default": "docker.io"
+            },
+            "repository": {
+              "type": "string",
+              "default": "alpine/k8s"
+            },
+            "tag": {
+              "type": "string",
+              "default": "1.31.13"
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": ["Always", "IfNotPresent", "Never"]
+            }
+          }
+        },
+        "resources": {
+          "type": "object",
+          "description": "Container resources"
+        }
+      }
+    },
+    "volumePermissions": {
+      "type": "object",
+      "description": "Volume permissions init container configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable init container for volume permissions",
+          "default": false
+        },
+        "image": {
+          "type": "object",
+          "description": "Init container image",
+          "properties": {
+            "registry": {
+              "type": "string"
+            },
+            "repository": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "pullPolicy": {
+              "type": "string"
+            }
+          }
+        },
+        "resources": {
+          "type": "object",
+          "description": "Container resources"
+        }
+      }
+    },
+    "sysctls": {
+      "type": "object",
+      "description": "Sysctls configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable sysctls init container",
+          "default": false
+        }
+      }
+    },
+    "existingConfigmap": {
+      "type": "string",
+      "description": "Name of existing ConfigMap with Valkey configuration"
+    },
+    "extraEnvVars": {
+      "type": "array",
+      "description": "Extra environment variables",
+      "items": {
+        "type": "object"
+      }
+    },
+    "extraVolumes": {
+      "type": "array",
+      "description": "Extra volumes",
+      "items": {
+        "type": "object"
+      }
+    },
+    "extraVolumeMounts": {
+      "type": "array",
+      "description": "Extra volume mounts",
+      "items": {
+        "type": "object"
+      }
+    },
+    "tls": {
+      "type": "object",
+      "description": "TLS configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable TLS",
+          "default": false
+        },
+        "port": {
+          "type": "integer",
+          "description": "TLS port",
+          "default": 6380
+        },
+        "existingSecret": {
+          "type": "string",
+          "description": "Name of existing secret with TLS certificates"
+        },
+        "certFilename": {
+          "type": "string",
+          "description": "Certificate filename in secret",
+          "default": "tls.crt"
+        },
+        "certKeyFilename": {
+          "type": "string",
+          "description": "Certificate key filename in secret",
+          "default": "tls.key"
+        },
+        "caCertFilename": {
+          "type": "string",
+          "description": "CA certificate filename in secret",
+          "default": "ca.crt"
+        },
+        "authClients": {
+          "type": "boolean",
+          "description": "Require client authentication",
+          "default": true
+        }
+      }
+    },
+    "extraDeploy": {
+      "type": "array",
+      "description": "Extra Kubernetes resources to deploy",
+      "items": {
+        "type": "object"
+      }
+    },
+    "serviceBinding": {
+      "type": "object",
+      "description": "Service Binding configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable Service Binding",
+          "default": false
+        }
+      }
+    },
+    "headlessService": {
+      "type": "object",
+      "description": "Headless service configuration",
+      "properties": {
+        "annotations": {
+          "type": "object",
+          "description": "Headless service annotations"
+        },
+        "extraPorts": {
+          "type": "array",
+          "description": "Extra ports for headless service",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "podSecurityPolicy": {
+      "type": "object",
+      "description": "Pod Security Policy configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable Pod Security Policy",
+          "default": false
+        }
+      }
+    },
+    "diagnosticMode": {
+      "type": "object",
+      "description": "Diagnostic mode configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable diagnostic mode",
+          "default": false
+        }
+      }
+    }
+  }
+}

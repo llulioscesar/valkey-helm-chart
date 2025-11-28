@@ -8,6 +8,8 @@ on:
       - 'Chart.yaml'
       - 'README.md'
       - 'artifacthub-repo.yml'
+      - 'public-key.asc'
+      - 'values.schema.json'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -42,7 +44,20 @@ jobs:
         with:
           version: v3.12.1
 
+      - name: Import GPG key
+        if: ${{ env.GPG_PRIVATE_KEY != '' }}
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          # Configure GPG for non-interactive use
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          gpg-connect-agent reloadagent /bye || true
+
       - name: Create Helm repository index
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           # Create directories
           mkdir -p .cr-release-packages
@@ -75,8 +90,16 @@ jobs:
             cp existing-index.yaml .cr-release-packages/ || true
           fi
 
-          # Package the current chart
-          helm package . -d .cr-release-packages
+          # Package the current chart (with signing if GPG key is available)
+          if [ -n "$GPG_PASSPHRASE" ] && gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep -q "sec"; then
+            echo "Signing chart with GPG key..."
+            helm package . -d .cr-release-packages --sign --key "Start Codex" --keyring ~/.gnupg/secring.gpg 2>/dev/null || \
+            helm package . -d .cr-release-packages --sign --key "cloud@startcodex.com" --passphrase-file <(echo "$GPG_PASSPHRASE") 2>/dev/null || \
+            helm package . -d .cr-release-packages
+          else
+            echo "Packaging chart without signature..."
+            helm package . -d .cr-release-packages
+          fi
 
           # Create/update the index with existing and new charts
           if [ -f .cr-release-packages/existing-index.yaml ]; then
@@ -87,9 +110,13 @@ jobs:
             helm repo index .cr-release-packages --url https://start-codex.github.io/valkey-helm-chart
           fi
 
-          # Copy new chart files to public directory
+          # Copy new chart files to public directory (including .prov files if signed)
           if ls .cr-release-packages/*.tgz 1> /dev/null 2>&1; then
             cp .cr-release-packages/*.tgz public/ || true
+          fi
+          if ls .cr-release-packages/*.prov 1> /dev/null 2>&1; then
+            cp .cr-release-packages/*.prov public/ || true
+            echo "Provenance files copied"
           fi
 
           # Copy the updated index
@@ -99,6 +126,7 @@ jobs:
 
           cp README.md public/ || true
           cp artifacthub-repo.yml public/ || true
+          cp public-key.asc public/ || true
 
           # Verify what we have
           echo "Contents of public directory:"
@@ -208,7 +236,14 @@ jobs:
                       <li><a href="index.yaml">index.yaml</a> - Helm repository index</li>
                       <li><a href="README.md">README.md</a> - Chart documentation</li>
                       <li><a href="artifacthub-repo.yml">artifacthub-repo.yml</a> - Artifact Hub metadata</li>
+                      <li><a href="public-key.asc">public-key.asc</a> - GPG public key for chart verification</li>
                   </ul>
+              </div>
+
+              <div class="section">
+                  <h2>🔐 Chart Verification</h2>
+                  <p>Charts are signed with GPG. To verify:</p>
+                  <div class="code">wget https://start-codex.github.io/valkey-helm-chart/public-key.asc<br>gpg --import public-key.asc<br>helm verify valkey-0.1.24.tgz</div>
               </div>
           </body>
           </html>

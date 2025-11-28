@@ -5,7 +5,17 @@ type: application
 version: 0.1.24
 appVersion: "9.0.0"
 annotations:
-  images: |
+  artifacthub.io/signKey: |
+    fingerprint: BD9C3A3FB5C152390B589739DA06B8958C5CE1D1
+    url: https://start-codex.github.io/valkey-helm-chart/public-key.asc
+  artifacthub.io/category: database
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/links: |
+    - name: Valkey Official
+      url: https://valkey.io/
+    - name: Chart Source
+      url: https://github.com/start-codex/valkey-helm-chart
+  artifacthub.io/images: |
     - name: valkey
       image: docker.io/valkey/valkey:9.0.0
     - name: os-shell
@@ -14,8 +24,8 @@ annotations:
       image: docker.io/oliver006/redis_exporter:v1.80.0
     - name: kubectl
       image: docker.io/alpine/k8s:1.31.13
-  licenses: Apache-2.0
-  category: database
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/prerelease: "false"
 keywords:
   - valkey
   - redis
