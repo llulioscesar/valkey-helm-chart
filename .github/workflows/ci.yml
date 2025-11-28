@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_call:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.0
+
+      - name: Lint chart
+        run: helm lint .
+
+      - name: Validate JSON schema
+        run: |
+          if [ -f values.schema.json ]; then
+            python3 -m json.tool values.schema.json > /dev/null
+            echo "✅ values.schema.json is valid"
+          fi
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - name: standalone-default
+            args: ""
+          - name: standalone-auth
+            args: "--set auth.enabled=true --set auth.password=test"
+          - name: standalone-metrics
+            args: "--set metrics.enabled=true"
+          - name: sentinel-mode
+            args: "--set architecture=sentinel --set auth.enabled=true --set auth.password=test"
+          - name: sentinel-metrics
+            args: "--set architecture=sentinel --set metrics.enabled=true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.0
+
+      - name: Test template - ${{ matrix.config.name }}
+        run: |
+          helm template test . ${{ matrix.config.args }} > output.yaml
+
+          # Validate required resources
+          grep -q "kind: StatefulSet" output.yaml
+          grep -q "kind: Service" output.yaml
+          grep -q "kind: ConfigMap" output.yaml
+
+          echo "✅ ${{ matrix.config.name }} passed"
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.0
+
+      - name: Package chart
+        run: |
+          helm package .
+          ls -la *.tgz
+          echo "✅ Package successful"
