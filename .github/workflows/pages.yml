@@ -7,6 +7,7 @@ on:
     paths:
       - 'Chart.yaml'
       - 'README.md'
+      - 'artifacthub-repo.yml'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -97,6 +98,7 @@ jobs:
           fi
 
           cp README.md public/ || true
+          cp artifacthub-repo.yml public/ || true
 
           # Verify what we have
           echo "Contents of public directory:"
@@ -205,6 +207,7 @@ jobs:
                   <ul>
                       <li><a href="index.yaml">index.yaml</a> - Helm repository index</li>
                       <li><a href="README.md">README.md</a> - Chart documentation</li>
+                      <li><a href="artifacthub-repo.yml">artifacthub-repo.yml</a> - Artifact Hub metadata</li>
                   </ul>
               </div>
           </body>

@@ -1,189 +1,275 @@
 # Valkey Helm Chart
 
-Un Helm chart para desplegar Valkey en Kubernetes con soporte para modos standalone y sentinel con autenticación opcional.
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/valkey)](https://artifacthub.io/packages/helm/valkey/valkey)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Helm](https://img.shields.io/badge/Helm-3.x-blue)](https://helm.sh)
 
-## Características
+<p align="center">
+  <img src="https://valkey.io/img/valkey-logo-og.png" alt="Valkey Logo" width="300">
+</p>
 
-- ✅ Modo standalone y sentinel
-- ✅ Autenticación opcional
-- ✅ Persistencia configurable
-- ✅ Métricas opcionales con exportador Redis
-- ✅ Configuración de recursos
-- ✅ Políticas de red
-- ✅ Configuración de seguridad
-- ✅ Init containers para permisos de volumen
-- ✅ Soporte para múltiples storage classes
-- ✅ Actualizaciones automáticas transparentes con pre-upgrade hooks
+Helm chart for deploying [Valkey](https://valkey.io/) on Kubernetes. Valkey is a high-performance, open-source data structure server compatible with Redis.
 
-## Instalación
+## Table of Contents
 
-### Opción 1: Instalación local (desarrollo/pruebas)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Quick Start](#quick-start)
+- [Architectures](#architectures)
+- [Configuration](#configuration)
+- [Examples](#examples)
+- [Connecting to Valkey](#connecting-to-valkey)
+- [Upgrades](#upgrades)
+- [Monitoring](#monitoring)
+- [Security](#security)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
 
-Si tienes el código del chart localmente:
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| **Standalone Mode** | Simple single-instance deployment |
+| **Sentinel Mode** | High availability with automatic failover |
+| **Authentication** | Support for password and existing secrets |
+| **Persistence** | Configurable persistent volumes |
+| **Metrics** | Built-in Prometheus exporter |
+| **Security** | SecurityContext, NetworkPolicies, RBAC |
+| **Automatic Upgrades** | Pre-upgrade hooks for zero-downtime migrations |
+| **TLS** | Support for encrypted connections |
+
+## Requirements
+
+| Component | Version |
+|-----------|---------|
+| Kubernetes | >= 1.23 |
+| Helm | >= 3.8 |
+
+## Quick Start
 
 ```bash
-# Sin autenticación
-helm install valkey-standalone .
-
-# Con autenticación
-helm install valkey-standalone . \
-  --set auth.enabled=true \
-  --set auth.password=mipassword
-
-# Modo sentinel
-helm install valkey-sentinel . \
-  --set architecture=sentinel \
-  --set auth.enabled=true \
-  --set auth.password=mipassword
-
-# Con archivo de valores personalizado
-helm install valkey-standalone . -f my-values.yaml
-```
-
-### Opción 2: Desde repositorio de Helm (producción)
-
-```bash
-# Agregar el repositorio
+# Add the repository
 helm repo add valkey https://start-codex.github.io/valkey-helm-chart
 helm repo update
 
-# Instalar en modo standalone
-helm install valkey-standalone valkey/valkey
+# Install with default values
+helm install my-valkey valkey/valkey
 
-# Con autenticación
-helm install valkey-standalone valkey/valkey \
+# Install with authentication
+helm install my-valkey valkey/valkey \
   --set auth.enabled=true \
-  --set auth.password=mipassword
-
-# Modo sentinel
-helm install valkey-sentinel valkey/valkey \
-  --set architecture=sentinel \
-  --set auth.enabled=true \
-  --set auth.password=mipassword
+  --set auth.password="your-secure-password"
 ```
 
-## Configuración
+## Architectures
 
-### Parámetros principales
+### Standalone (Default)
 
-| Parámetro | Descripción | Valor por defecto |
-|-----------|-------------|-------------------|
-| `architecture` | Arquitectura de despliegue (`standalone` o `sentinel`) | `standalone` |
-| `auth.enabled` | Habilitar autenticación | `false` |
-| `auth.password` | Contraseña para autenticación | `""` |
-| `auth.existingSecret` | Secret existente con contraseña | `""` |
+Simple deployment with a single Valkey instance. Ideal for development and workloads that don't require high availability.
 
-### Configuración de imagen
+```
++------------------+
+|     Valkey       |
+|   (standalone)   |
++------------------+
+        |
++------------------+
+|       PVC        |
++------------------+
+```
 
-| Parámetro | Descripción | Valor por defecto |
-|-----------|-------------|-------------------|
-| `image.registry` | Registro de imagen | `docker.io` |
-| `image.repository` | Repositorio de imagen | `valkey/valkey` |
-| `image.tag` | Tag de imagen | `8.1.3` |
-| `image.pullPolicy` | Política de descarga | `IfNotPresent` |
+```bash
+helm install my-valkey valkey/valkey
+```
 
-### Configuración standalone
+### Sentinel (High Availability)
 
-| Parámetro | Descripción | Valor por defecto |
-|-----------|-------------|-------------------|
-| `standalone.replicaCount` | Número de réplicas | `1` |
-| `standalone.persistence.enabled` | Habilitar persistencia | `true` |
-| `standalone.persistence.size` | Tamaño del volumen | `8Gi` |
-| `standalone.service.type` | Tipo de servicio | `ClusterIP` |
-| `standalone.service.port` | Puerto del servicio | `6379` |
+Architecture with master, replicas, and sentinels for automatic failover. Recommended for production.
 
-### Configuración sentinel
+```
++------------------+     +------------------+     +------------------+
+|     Sentinel     |     |     Sentinel     |     |     Sentinel     |
++------------------+     +------------------+     +------------------+
+         |                       |                        |
+         +-------------+---------+------------------------+
+                       |
+         +-------------+-------------+
+         |             |             |
++--------v---+  +------v-----+  +----v-------+
+|   Master   |  |  Replica   |  |  Replica   |
++------------+  +------------+  +------------+
+      |              |               |
++-----v----+  +------v-----+  +-----v------+
+|   PVC    |  |    PVC     |  |    PVC     |
++----------+  +------------+  +------------+
+```
 
-| Parámetro | Descripción | Valor por defecto |
-|-----------|-------------|-------------------|
-| `sentinel.enabled` | Habilitar sentinel | `false` |
-| `sentinel.replicaCount` | Número de sentinels | `3` |
-| `sentinel.quorum` | Quorum para failover | `2` |
-| `master.replicaCount` | Número de masters | `1` |
-| `replica.replicaCount` | Número de réplicas | `2` |
+```bash
+helm install my-valkey valkey/valkey \
+  --set architecture=sentinel \
+  --set sentinel.replicaCount=3 \
+  --set replica.replicaCount=2
+```
 
-### Configuración de métricas
+## Configuration
 
-| Parámetro | Descripción | Valor por defecto |
-|-----------|-------------|-------------------|
-| `metrics.enabled` | Habilitar métricas | `false` |
-| `metrics.serviceMonitor.enabled` | Habilitar ServiceMonitor | `false` |
+### Global Parameters
 
-## Ejemplos de uso
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `architecture` | Deployment mode: `standalone` or `sentinel` | `standalone` |
+| `global.imageRegistry` | Global registry for all images | `""` |
+| `global.storageClass` | Global StorageClass | `""` |
+| `clusterDomain` | Kubernetes cluster domain | `cluster.local` |
 
-### Ejemplo 1: Valkey standalone básico
+### Image
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `image.registry` | Image registry | `docker.io` |
+| `image.repository` | Image repository | `valkey/valkey` |
+| `image.tag` | Image tag | `9.0.0` |
+| `image.pullPolicy` | Pull policy | `IfNotPresent` |
+
+### Authentication
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `auth.enabled` | Enable authentication | `false` |
+| `auth.password` | Password (not recommended for production) | `""` |
+| `auth.existingSecret` | Name of existing Secret | `""` |
+| `auth.existingSecretPasswordKey` | Password key in Secret | `password` |
+
+### Standalone
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `standalone.replicaCount` | Number of replicas | `1` |
+| `standalone.persistence.enabled` | Enable persistence | `true` |
+| `standalone.persistence.size` | Volume size | `8Gi` |
+| `standalone.persistence.storageClass` | StorageClass | `""` |
+| `standalone.service.type` | Service type | `ClusterIP` |
+| `standalone.service.port` | Service port | `6379` |
+| `standalone.resources.requests.memory` | Memory request | `128Mi` |
+| `standalone.resources.requests.cpu` | CPU request | `100m` |
+| `standalone.resources.limits.memory` | Memory limit | `256Mi` |
+
+### Sentinel
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `sentinel.replicaCount` | Number of sentinels | `3` |
+| `sentinel.quorum` | Quorum for failover | `2` |
+| `sentinel.downAfterMilliseconds` | Time to detect failure | `30000` |
+| `sentinel.failoverTimeout` | Failover timeout | `180000` |
+| `master.replicaCount` | Number of masters | `1` |
+| `replica.replicaCount` | Number of replicas | `2` |
+
+### Metrics
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `metrics.enabled` | Enable Prometheus exporter | `false` |
+| `metrics.image.repository` | Exporter image | `oliver006/redis_exporter` |
+| `metrics.image.tag` | Exporter tag | `v1.80.0` |
+| `metrics.serviceMonitor.enabled` | Create ServiceMonitor | `false` |
+| `metrics.podMonitor.enabled` | Create PodMonitor | `false` |
+
+### Security
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `podSecurityContext.fsGroup` | Filesystem group | `999` |
+| `podSecurityContext.runAsUser` | Container user | `999` |
+| `securityContext.runAsNonRoot` | Run as non-root | `true` |
+| `securityContext.readOnlyRootFilesystem` | Read-only filesystem | `true` |
+| `networkPolicy.enabled` | Enable NetworkPolicy | `false` |
+
+## Examples
+
+### Local Development
 
 ```yaml
-# values.yaml
+# values-dev.yaml
 architecture: standalone
 auth:
   enabled: false
 standalone:
   persistence:
-    enabled: true
-    size: 10Gi
+    enabled: false
   resources:
     requests:
-      memory: 256Mi
-      cpu: 200m
+      memory: 64Mi
+      cpu: 50m
     limits:
-      memory: 512Mi
+      memory: 128Mi
 ```
 
 ```bash
-# Instalación local
-helm install valkey-standalone . -f values.yaml
-
-# Desde repositorio
-helm install valkey-standalone valkey/valkey -f values.yaml
+helm install valkey-dev valkey/valkey -f values-dev.yaml
 ```
 
-### Ejemplo 2: Valkey con autenticación
+### Production with Authentication
 
 ```yaml
-# values.yaml
+# values-prod.yaml
 architecture: standalone
 auth:
   enabled: true
-  password: "mi-password-seguro"
+  existingSecret: valkey-secret
+  existingSecretPasswordKey: password
 standalone:
   persistence:
     enabled: true
-    storageClass: "fast-ssd"
-    size: 20Gi
+    storageClass: fast-ssd
+    size: 50Gi
+  resources:
+    requests:
+      memory: 1Gi
+      cpu: 500m
+    limits:
+      memory: 2Gi
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
 ```
 
 ```bash
-# Instalación local
-helm install valkey-auth . -f values.yaml
+# Create the secret first
+kubectl create secret generic valkey-secret \
+  --from-literal=password="your-super-secure-password"
 
-# Desde repositorio
-helm install valkey-auth valkey/valkey -f values.yaml
+# Install
+helm install valkey-prod valkey/valkey -f values-prod.yaml
 ```
 
-### Ejemplo 3: Configuración sentinel con alta disponibilidad
+### High Availability with Sentinel
 
 ```yaml
-# values.yaml
+# values-ha.yaml
 architecture: sentinel
 auth:
   enabled: true
-  password: "password-ha"
+  password: "ha-password"
 
 sentinel:
   replicaCount: 3
   quorum: 2
-  downAfterMilliseconds: 30000
-  failoverTimeout: 180000
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
 
 master:
   persistence:
     enabled: true
-    size: 50Gi
+    size: 20Gi
   resources:
     requests:
       memory: 512Mi
-      cpu: 500m
+      cpu: 250m
     limits:
       memory: 1Gi
 
@@ -191,11 +277,11 @@ replica:
   replicaCount: 2
   persistence:
     enabled: true
-    size: 50Gi
+    size: 20Gi
   resources:
     requests:
       memory: 512Mi
-      cpu: 500m
+      cpu: 250m
     limits:
       memory: 1Gi
 
@@ -206,140 +292,100 @@ metrics:
 ```
 
 ```bash
-# Instalación local
-helm install valkey-ha . -f values.yaml
-
-# Desde repositorio
-helm install valkey-ha valkey/valkey -f values.yaml
+helm install valkey-ha valkey/valkey -f values-ha.yaml
 ```
 
-### Ejemplo 4: Con métricas y monitoreo
+### With Network Policies
 
 ```yaml
-# values.yaml
+# values-secure.yaml
 architecture: standalone
 auth:
   enabled: true
-  password: "password123"
+  existingSecret: valkey-secret
 
-metrics:
+networkPolicy:
   enabled: true
-  serviceMonitor:
-    enabled: true
-    interval: 30s
-
-standalone:
-  persistence:
-    enabled: true
-    size: 15Gi
+  allowExternal: false
+  ingressNSMatchLabels:
+    app: my-app
 ```
+
+## Connecting to Valkey
+
+### From Inside the Cluster
 
 ```bash
-# Instalación local
-helm install valkey-monitored . -f values.yaml
+# Temporary pod for testing
+kubectl run valkey-client --rm -it \
+  --image=valkey/valkey:9.0.0 \
+  -- valkey-cli -h my-valkey
 
-# Desde repositorio
-helm install valkey-monitored valkey/valkey -f values.yaml
+# With authentication
+kubectl run valkey-client --rm -it \
+  --image=valkey/valkey:9.0.0 \
+  -- valkey-cli -h my-valkey -a "your-password"
 ```
 
-### Ejemplo 5: Configuración para entorno de desarrollo
-
-```yaml
-# install.yaml
-architecture: standalone
-auth:
-  enabled: true
-  existingSecret: redis-secret
-  existingSecretPasswordKey: password
-standalone:
-  persistence:
-    enabled: true
-    size: 1Gi
-    storageClass: "longhorn-simple"
-  resources:
-    requests:
-      memory: 256Mi
-      cpu: 100m
-metrics:
-  enabled: true
-  podMonitor:
-    enabled: true
-```
+### Port-forward for Local Access
 
 ```bash
-# Instalación con configuración específica
-helm install valkey-dev valkey/valkey -f install.yaml -n development
+kubectl port-forward svc/my-valkey 6379:6379
+
+# In another terminal
+valkey-cli -h localhost -p 6379
 ```
 
-## Conectarse a Valkey
-
-### Modo standalone
+### Sentinel - Get Current Master
 
 ```bash
-# Sin autenticación
-kubectl run valkey-client --rm -it --image=valkey/valkey -- valkey-cli -h <release-name>-valkey
+kubectl run valkey-client --rm -it \
+  --image=valkey/valkey:9.0.0 \
+  -- valkey-cli -h my-valkey-sentinel -p 26379
 
-# Con autenticación
-kubectl run valkey-client --rm -it --image=valkey/valkey -- valkey-cli -h <release-name>-valkey -a <password>
+# Useful sentinel commands
+> SENTINEL masters
+> SENTINEL get-master-addr-by-name mymaster
+> SENTINEL replicas mymaster
 ```
 
-### Modo sentinel
+## Upgrades
+
+This chart includes an automatic upgrade mechanism that handles StatefulSets transparently, avoiding immutable field errors.
+
+### How It Works
+
+1. **Pre-upgrade Hook**: Deletes StatefulSets with `--cascade=orphan`, preserving pods and PVCs
+2. **Recreation**: Helm recreates StatefulSets with new configuration
+3. **Rolling Update**: Pods are updated gradually
+
+### Upgrading the Chart
 
 ```bash
-# Conectar al master a través de sentinel
-kubectl run valkey-client --rm -it --image=valkey/valkey -- valkey-cli -h <release-name>-valkey-sentinel -p 26379
-
-# En el cliente sentinel:
-# sentinel masters
-# sentinel get-master-addr-by-name mymaster
-```
-
-## Actualización del Chart
-
-Este chart incluye un mecanismo automático de actualización que maneja los StatefulSets de forma transparente.
-
-### Proceso de actualización automática
-
-Cuando actualizas el chart a una nueva versión, el sistema realiza automáticamente:
-
-1. **Pre-upgrade Hook**: Antes de la actualización, se ejecuta un Job que elimina los StatefulSets existentes usando `--cascade=orphan`, preservando:
-   - Los pods en ejecución
-   - Los PersistentVolumeClaims (PVCs) con los datos
-   - La disponibilidad del servicio
-
-2. **Recreación de StatefulSets**: Helm recrea los StatefulSets con la nueva configuración
-
-3. **Rolling Update**: Los pods se actualizan uno por uno (RollingUpdate) minimizando el tiempo de inactividad
-
-### Cómo actualizar
-
-```bash
-# Actualizar desde repositorio
+# Update repository
 helm repo update
-helm upgrade valkey-standalone valkey/valkey
 
-# Actualizar con nuevos valores
-helm upgrade valkey-standalone valkey/valkey -f new-values.yaml
+# View available versions
+helm search repo valkey/valkey --versions
 
-# Actualizar instalación local
-helm upgrade valkey-standalone .
+# Upgrade to latest version
+helm upgrade my-valkey valkey/valkey
 
-# Actualizar con cambio de versión de imagen
-helm upgrade valkey-standalone valkey/valkey \
-  --set image.tag=8.1.4
+# Upgrade with new values
+helm upgrade my-valkey valkey/valkey -f new-values.yaml
+
+# Upgrade Valkey image
+helm upgrade my-valkey valkey/valkey --set image.tag=9.0.0
 ```
 
-### Configuración del hook de actualización
-
-El hook de pre-upgrade se puede personalizar en `values.yaml`:
+### Hook Configuration
 
 ```yaml
 preUpgradeHook:
   image:
     registry: docker.io
-    repository: alpine/k8s  # Imagen Alpine con kubectl - gratuita y mantenida
-    tag: "1.31.4"
-    pullPolicy: IfNotPresent
+    repository: alpine/k8s
+    tag: "1.31.13"
   resources:
     limits:
       memory: 128Mi
@@ -348,51 +394,184 @@ preUpgradeHook:
       memory: 64Mi
 ```
 
-### Notas importantes sobre actualizaciones
+## Monitoring
 
-- Los datos en los PVCs se preservan durante las actualizaciones
-- El proceso es completamente automático y transparente
-- Los pods se actualizan gradualmente (uno a la vez) para mantener disponibilidad
-- El hook solo se ejecuta durante upgrades, no en instalaciones nuevas
-- Se requiere RBAC habilitado en el cluster (habilitado por defecto en la mayoría de clusters)
+### Enable Prometheus Metrics
 
-## Desinstalación
-
-```bash
-helm uninstall <release-name>
+```yaml
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
 ```
 
-## Desarrollo
+### Available Metrics
 
-### Requisitos
+| Metric | Description |
+|--------|-------------|
+| `redis_up` | Server status |
+| `redis_connected_clients` | Connected clients |
+| `redis_memory_used_bytes` | Memory used |
+| `redis_commands_processed_total` | Processed commands |
+| `redis_keyspace_hits_total` | Cache hits |
+| `redis_keyspace_misses_total` | Cache misses |
 
-- Helm 3.x
-- Kubernetes 1.19+
+### Grafana Dashboard
 
-### Probar el chart localmente
+You can use the official Redis Exporter dashboard: [Grafana Dashboard 763](https://grafana.com/grafana/dashboards/763)
+
+## Security
+
+### Production Recommendations
+
+1. **Use external Secrets** for passwords:
+   ```yaml
+   auth:
+     enabled: true
+     existingSecret: my-valkey-secret
+   ```
+
+2. **Enable Network Policies**:
+   ```yaml
+   networkPolicy:
+     enabled: true
+     allowExternal: false
+   ```
+
+3. **Configure resources**:
+   ```yaml
+   standalone:
+     resources:
+       limits:
+         memory: 2Gi
+       requests:
+         memory: 1Gi
+   ```
+
+4. **Enable TLS** (if needed):
+   ```yaml
+   tls:
+     enabled: true
+     existingSecret: valkey-tls-secret
+   ```
+
+### Default Security Context
+
+```yaml
+podSecurityContext:
+  fsGroup: 999
+  runAsUser: 999
+  runAsGroup: 999
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+```
+
+## Troubleshooting
+
+### Pod Won't Start
 
 ```bash
-# Validar sintaxis
+# View events
+kubectl describe pod my-valkey-0
+
+# View logs
+kubectl logs my-valkey-0
+
+# Check PVC
+kubectl get pvc
+```
+
+### Connection Error
+
+```bash
+# Check service
+kubectl get svc my-valkey
+
+# Check endpoints
+kubectl get endpoints my-valkey
+
+# Connectivity test
+kubectl run test --rm -it --image=busybox -- nc -zv my-valkey 6379
+```
+
+### StatefulSet Upgrade Error
+
+If the pre-upgrade hook fails, you can delete manually:
+
+```bash
+kubectl delete statefulset my-valkey --cascade=orphan
+helm upgrade my-valkey valkey/valkey
+```
+
+### Check Sentinel Status
+
+```bash
+kubectl exec -it my-valkey-sentinel-0 -- valkey-cli -p 26379 SENTINEL masters
+```
+
+## Uninstallation
+
+```bash
+# Uninstall release
+helm uninstall my-valkey
+
+# Delete PVCs (WARNING: this deletes data)
+kubectl delete pvc -l app.kubernetes.io/instance=my-valkey
+```
+
+## Development
+
+### Test Locally
+
+```bash
+# Validate syntax
 helm lint .
 
-# Probar templates en modo standalone
-helm template test . --set architecture=standalone
+# Render templates
+helm template test . --debug
 
-# Probar templates en modo sentinel
-helm template test . --set architecture=sentinel --set auth.enabled=true --set auth.password=test
+# Dry-run
+helm install test . --dry-run --debug
 
-# Instalar localmente para pruebas
-helm install test-valkey . --dry-run --debug
+# Install in test namespace
+helm install test . -n valkey-test --create-namespace
 ```
 
-## Contribuir
+### Run Tests
 
-1. Fork el repositorio
-2. Crea una rama para tu feature
-3. Commit tus cambios
-4. Push a la rama
-5. Crea un Pull Request
+```bash
+helm test my-valkey
+```
 
-## Licencia
+## Contributing
 
-Este proyecto está bajo la licencia MIT.
+1. Fork the repository
+2. Create a branch (`git checkout -b feature/new-feature`)
+3. Commit your changes (`git commit -am 'Add new feature'`)
+4. Push to branch (`git push origin feature/new-feature`)
+5. Create a Pull Request
+
+## Links
+
+- [Valkey Official](https://valkey.io/)
+- [Valkey GitHub](https://github.com/valkey-io/valkey)
+- [Artifact Hub](https://artifacthub.io/packages/helm/valkey/valkey)
+- [Chart Repository](https://github.com/start-codex/valkey-helm-chart)
+
+## License
+
+This project is licensed under [Apache 2.0](LICENSE).
+
+---
+
+<p align="center">
+  Made with ❤️ by <a href="https://github.com/start-codex">StartCodex</a>
+</p>
