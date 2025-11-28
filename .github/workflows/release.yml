@@ -1,13 +1,32 @@
-name: Release Charts
+name: Release
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Chart.yaml'
+      - 'values.yaml'
+      - 'values.schema.json'
+      - 'templates/**'
   workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "release"
+  cancel-in-progress: false
 
 jobs:
   release:
-    permissions:
-      contents: write
+    name: Release Chart
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,29 +38,195 @@ jobs:
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        continue-on-error: true
+
       - name: Install Helm
         uses: azure/setup-helm@v4
         with:
-          version: v3.12.1
+          version: v3.16.0
 
-      - name: Add dependency chart repos
-        run: |
-          helm repo add bitnami https://charts.bitnami.com/bitnami
-
-      - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.6.0
-        with:
-          charts_dir: .
-          skip_existing: true
+      - name: Import GPG key
         env:
-          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-          CR_SKIP_EXISTING: true
-
-      - name: Trigger Pages Workflow
-        if: github.ref == 'refs/heads/main'
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          curl -X POST \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/actions/workflows/pages.yml/dispatches \
-            -d '{"ref":"main"}'
+          if [ -n "$GPG_PRIVATE_KEY" ]; then
+            echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+            echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+            gpg-connect-agent reloadagent /bye || true
+            echo "GPG_AVAILABLE=true" >> $GITHUB_ENV
+          else
+            echo "GPG_AVAILABLE=false" >> $GITHUB_ENV
+          fi
+
+      - name: Lint chart
+        run: helm lint .
+
+      - name: Build and Package
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          mkdir -p .packages
+          mkdir -p public
+
+          # Download existing repository files
+          echo "Downloading existing repository..."
+          wget -q https://start-codex.github.io/valkey-helm-chart/index.yaml -O existing-index.yaml || echo "No existing index found"
+
+          # Download existing chart packages
+          if [ -f existing-index.yaml ]; then
+            urls=$(grep -o 'https://start-codex.github.io/valkey-helm-chart/[^"]*\.tgz' existing-index.yaml || true)
+            if [ -n "$urls" ]; then
+              echo "$urls" | while read url; do
+                if [ -n "$url" ]; then
+                  filename=$(basename "$url")
+                  echo "Downloading: $filename"
+                  wget -q "$url" -O "public/$filename" || true
+                  wget -q "$url" -O ".packages/$filename" || true
+                fi
+              done
+            fi
+            cp existing-index.yaml .packages/ || true
+          fi
+
+          # Package chart (with signing if available)
+          if [ "$GPG_AVAILABLE" = "true" ] && [ -n "$GPG_PASSPHRASE" ]; then
+            echo "Packaging with GPG signature..."
+            echo "$GPG_PASSPHRASE" | helm package . -d .packages \
+              --sign \
+              --key "cloud@startcodex.com" \
+              --passphrase-file /dev/stdin || helm package . -d .packages
+          else
+            echo "Packaging without signature..."
+            helm package . -d .packages
+          fi
+
+          # Generate index
+          if [ -f .packages/existing-index.yaml ]; then
+            helm repo index .packages --url https://start-codex.github.io/valkey-helm-chart --merge .packages/existing-index.yaml
+          else
+            helm repo index .packages --url https://start-codex.github.io/valkey-helm-chart
+          fi
+
+          # Copy to public directory
+          cp .packages/*.tgz public/ || true
+          cp .packages/*.prov public/ 2>/dev/null || true
+          cp .packages/index.yaml public/
+
+          # Copy static files
+          cp README.md public/
+          cp artifacthub-repo.yml public/
+          cp public-key.asc public/
+
+          # Show results
+          echo ""
+          echo "=== Release Contents ==="
+          ls -la public/
+          echo ""
+          echo "=== Chart Versions ==="
+          grep "version:" public/index.yaml | head -20
+
+      - name: Create index.html
+        run: |
+          CHART_VERSION=$(grep '^version:' Chart.yaml | awk '{print $2}')
+          cat > public/index.html << EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Valkey Helm Chart Repository</title>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <style>
+                  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; color: #333; }
+                  .header { text-align: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #eee; }
+                  .header img { width: 120px; margin-bottom: 20px; }
+                  h1 { color: #2c5aa0; margin: 10px 0; }
+                  h2 { color: #34495e; margin-top: 30px; }
+                  .code { background: #f6f8fa; padding: 15px; border-radius: 6px; font-family: 'SFMono-Regular', Consolas, monospace; margin: 10px 0; overflow-x: auto; }
+                  .section { margin: 30px 0; }
+                  a { color: #0366d6; text-decoration: none; }
+                  a:hover { text-decoration: underline; }
+                  ul { padding-left: 20px; }
+                  li { margin: 8px 0; }
+                  .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin: 2px; }
+                  .badge-blue { background: #0366d6; color: white; }
+                  .badge-green { background: #28a745; color: white; }
+              </style>
+          </head>
+          <body>
+              <div class="header">
+                  <img src="https://valkey.io/img/valkey-logo-og.png" alt="Valkey Logo">
+                  <h1>Valkey Helm Chart</h1>
+                  <p>High-performance data structure server for Kubernetes</p>
+                  <span class="badge badge-blue">v${CHART_VERSION}</span>
+                  <span class="badge badge-green">Signed</span>
+              </div>
+
+              <div class="section">
+                  <h2>Quick Start</h2>
+                  <div class="code">
+          helm repo add valkey https://start-codex.github.io/valkey-helm-chart
+          helm repo update
+          helm install my-valkey valkey/valkey
+                  </div>
+              </div>
+
+              <div class="section">
+                  <h2>Installation Options</h2>
+                  <div class="code">
+          # Standalone mode (default)
+          helm install my-valkey valkey/valkey
+
+          # With authentication
+          helm install my-valkey valkey/valkey --set auth.enabled=true --set auth.password="secret"
+
+          # Sentinel mode (HA)
+          helm install my-valkey valkey/valkey --set architecture=sentinel
+                  </div>
+              </div>
+
+              <div class="section">
+                  <h2>Verify Chart Signature</h2>
+                  <div class="code">
+          wget https://start-codex.github.io/valkey-helm-chart/public-key.asc
+          gpg --import public-key.asc
+          helm pull valkey/valkey --verify
+                  </div>
+              </div>
+
+              <div class="section">
+                  <h2>Links</h2>
+                  <ul>
+                      <li><a href="https://github.com/start-codex/valkey-helm-chart">GitHub Repository</a></li>
+                      <li><a href="https://artifacthub.io/packages/helm/valkey/valkey">Artifact Hub</a></li>
+                      <li><a href="https://valkey.io/">Valkey Official</a></li>
+                  </ul>
+              </div>
+
+              <div class="section">
+                  <h2>Repository Files</h2>
+                  <ul>
+                      <li><a href="index.yaml">index.yaml</a> - Helm repository index</li>
+                      <li><a href="README.md">README.md</a> - Documentation</li>
+                      <li><a href="public-key.asc">public-key.asc</a> - GPG public key</li>
+                      <li><a href="artifacthub-repo.yml">artifacthub-repo.yml</a> - Artifact Hub metadata</li>
+                  </ul>
+              </div>
+
+              <p style="text-align: center; color: #666; margin-top: 40px;">
+                  Made with ❤️ by <a href="https://github.com/start-codex">StartCodex</a>
+              </p>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
