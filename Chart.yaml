@@ -26,7 +26,7 @@ keywords:
   - sentinel
   - high-performance
 home: https://valkey.io/
-icon: https://valkey.io/assets/images/valkey-logo.svg
+icon: https://valkey.io/img/valkey-logo-og.png
 sources:
   - https://github.com/valkey-io/valkey
   - https://github.com/start-codex/valkey-helm-chart
