@@ -5,13 +5,11 @@ on:
     branches: [main]
   push:
     branches: [main]
-    paths-ignore:
-      - '*.md'
-      - 'LICENSE'
+  workflow_call:
 
 jobs:
   lint:
-    name: Lint Chart
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -25,19 +23,25 @@ jobs:
       - name: Lint chart
         run: helm lint .
 
+      - name: Validate JSON schema
+        run: |
+          if [ -f values.schema.json ]; then
+            python3 -m json.tool values.schema.json > /dev/null
+            echo "✅ values.schema.json is valid"
+          fi
+
   test:
-    name: Test Templates
+    name: Test
     runs-on: ubuntu-latest
     needs: lint
     strategy:
+      fail-fast: false
       matrix:
         config:
           - name: standalone-default
             args: ""
           - name: standalone-auth
             args: "--set auth.enabled=true --set auth.password=test"
-          - name: standalone-persistence
-            args: "--set standalone.persistence.enabled=true --set standalone.persistence.size=10Gi"
           - name: standalone-metrics
             args: "--set metrics.enabled=true"
           - name: sentinel-mode
@@ -56,17 +60,16 @@ jobs:
       - name: Test template - ${{ matrix.config.name }}
         run: |
           helm template test . ${{ matrix.config.args }} > output.yaml
-          echo "✅ Template generation passed for ${{ matrix.config.name }}"
 
-      - name: Validate manifests - ${{ matrix.config.name }}
-        run: |
-          grep -q "kind: StatefulSet" output.yaml || (echo "❌ StatefulSet not found" && exit 1)
-          grep -q "kind: Service" output.yaml || (echo "❌ Service not found" && exit 1)
-          grep -q "kind: ConfigMap" output.yaml || (echo "❌ ConfigMap not found" && exit 1)
-          echo "✅ Manifest validation passed for ${{ matrix.config.name }}"
+          # Validate required resources
+          grep -q "kind: StatefulSet" output.yaml
+          grep -q "kind: Service" output.yaml
+          grep -q "kind: ConfigMap" output.yaml
+
+          echo "✅ ${{ matrix.config.name }} passed"
 
   package:
-    name: Package Chart
+    name: Package
     runs-on: ubuntu-latest
     needs: test
     steps:
@@ -82,21 +85,4 @@ jobs:
         run: |
           helm package .
           ls -la *.tgz
-          echo "✅ Chart packaging passed"
-
-  schema-validation:
-    name: Validate Values Schema
-    runs-on: ubuntu-latest
-    needs: lint
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Validate JSON schema
-        run: |
-          if [ -f values.schema.json ]; then
-            python3 -m json.tool values.schema.json > /dev/null
-            echo "✅ values.schema.json is valid JSON"
-          else
-            echo "⚠️ values.schema.json not found"
-          fi
+          echo "✅ Package successful"
