@@ -6,7 +6,7 @@ version: 0.1.24
 appVersion: "9.0.0"
 annotations:
   artifacthub.io/signKey: |
-    fingerprint: BD9C3A3FB5C152390B589739DA06B8958C5CE1D1
+    fingerprint: 35D9AD8B98D2FB5AF685CABA019335D0A0561140
     url: https://start-codex.github.io/valkey-helm-chart/public-key.asc
   artifacthub.io/category: database
   artifacthub.io/license: Apache-2.0
