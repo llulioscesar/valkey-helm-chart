@@ -50,23 +50,33 @@ jobs:
       - name: Import GPG key and create legacy keyring
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           if [ -n "$GPG_PRIVATE_KEY" ]; then
+            # Configure GPG for non-interactive use BEFORE import
+            mkdir -p ~/.gnupg
+            chmod 700 ~/.gnupg
+            echo "allow-loopback-pinentry" > ~/.gnupg/gpg-agent.conf
+            echo "pinentry-mode loopback" > ~/.gnupg/gpg.conf
+            gpg-connect-agent reloadagent /bye 2>/dev/null || true
+
             # Import key to GnuPG
             echo "$GPG_PRIVATE_KEY" | gpg --batch --import
 
-            # Configure GPG agent for non-interactive use
-            mkdir -p ~/.gnupg
-            echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-            echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
-            gpg-connect-agent reloadagent /bye || true
-
-            # Export to legacy format required by Helm
+            # Export to legacy format required by Helm (with passphrase)
             gpg --export > ~/.gnupg/pubring.gpg
-            gpg --batch --export-secret-keys > ~/.gnupg/secring.gpg
+            echo "$GPG_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback \
+              --passphrase-fd 0 --export-secret-keys > ~/.gnupg/secring.gpg
 
-            echo "GPG_AVAILABLE=true" >> $GITHUB_ENV
-            echo "✅ GPG key imported and legacy keyring created"
+            # Verify keyring was created
+            if [ -s ~/.gnupg/secring.gpg ]; then
+              echo "GPG_AVAILABLE=true" >> $GITHUB_ENV
+              echo "✅ GPG key imported and legacy keyring created"
+              ls -la ~/.gnupg/*.gpg
+            else
+              echo "GPG_AVAILABLE=false" >> $GITHUB_ENV
+              echo "⚠️ Failed to create legacy keyring"
+            fi
           else
             echo "GPG_AVAILABLE=false" >> $GITHUB_ENV
             echo "⚠️ No GPG key provided"
