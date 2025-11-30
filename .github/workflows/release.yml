@@ -47,17 +47,29 @@ jobs:
         with:
           version: v3.16.0
 
-      - name: Import GPG key
+      - name: Import GPG key and create legacy keyring
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
           if [ -n "$GPG_PRIVATE_KEY" ]; then
+            # Import key to GnuPG
             echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+            # Configure GPG agent for non-interactive use
+            mkdir -p ~/.gnupg
             echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+            echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
             gpg-connect-agent reloadagent /bye || true
+
+            # Export to legacy format required by Helm
+            gpg --export > ~/.gnupg/pubring.gpg
+            gpg --batch --export-secret-keys > ~/.gnupg/secring.gpg
+
             echo "GPG_AVAILABLE=true" >> $GITHUB_ENV
+            echo "✅ GPG key imported and legacy keyring created"
           else
             echo "GPG_AVAILABLE=false" >> $GITHUB_ENV
+            echo "⚠️ No GPG key provided"
           fi
 
       - name: Package Chart
@@ -80,8 +92,18 @@ jobs:
           if [ "$GPG_AVAILABLE" = "true" ] && [ -n "$GPG_PASSPHRASE" ]; then
             echo "📦 Packaging with GPG signature..."
             echo "$GPG_PASSPHRASE" | helm package . -d .packages \
-              --sign --key "cloud@startcodex.com" --passphrase-file /dev/stdin \
-              || helm package . -d .packages
+              --sign \
+              --key "cloud@startcodex.com" \
+              --keyring ~/.gnupg/secring.gpg \
+              --passphrase-file /dev/stdin
+
+            if [ -f .packages/*.prov ]; then
+              echo "✅ Chart signed successfully"
+              ls -la .packages/*.prov
+            else
+              echo "⚠️ Signature failed, packaging without signature"
+              helm package . -d .packages
+            fi
           else
             echo "📦 Packaging without signature..."
             helm package . -d .packages
