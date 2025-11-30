@@ -269,11 +269,9 @@ Return the Valkey configuration
 Return if Valkey authentication is enabled
 */}}
 {{- define "valkey.auth.enabled" -}}
-{{- if .Values.auth.enabled }}
-{{- true }}
-{{- else }}
-{{- false }}
-{{- end }}
+{{- if .Values.auth.enabled -}}
+true
+{{- end -}}
 {{- end }}
 
 {{/*
@@ -429,11 +427,9 @@ Return the Valkey password
 Return true if TLS is enabled
 */}}
 {{- define "valkey.tls.enabled" -}}
-{{- if .Values.tls.enabled }}
-    {{- true -}}
-{{- else }}
-    {{- false -}}
-{{- end }}
+{{- if .Values.tls.enabled -}}
+true
+{{- end -}}
 {{- end }}
 
 {{/*
@@ -484,11 +480,9 @@ Return the path to the CA cert file
 Return if metrics are enabled
 */}}
 {{- define "valkey.metrics.enabled" -}}
-{{- if .Values.metrics.enabled }}
-    {{- true -}}
-{{- else }}
-    {{- false -}}
-{{- end }}
+{{- if .Values.metrics.enabled -}}
+true
+{{- end -}}
 {{- end -}}
 
 {{/*

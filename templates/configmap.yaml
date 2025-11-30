@@ -22,13 +22,6 @@ data:
   {{- if .Values.sentinel.enabled }}
   sentinel.conf: |
     {{- .Values.sentinel.configuration | nindent 4 }}
-    sentinel monitor valkey-master {{ include "valkey.master.serviceName" . }} {{ include "valkey.port" . }} {{ .Values.sentinel.quorum }}
-    sentinel down-after-milliseconds valkey-master {{ .Values.sentinel.downAfterMilliseconds }}
-    sentinel failover-timeout valkey-master {{ .Values.sentinel.failoverTimeout }}
-    sentinel parallel-syncs valkey-master {{ .Values.sentinel.parallelSyncs }}
-    {{- if include "valkey.auth.enabled" . }}
-    sentinel auth-pass valkey-master $VALKEY_PASSWORD
-    {{- end }}
   {{- end }}
   {{- end }}
 {{- end }}

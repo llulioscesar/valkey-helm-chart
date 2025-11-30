@@ -13,6 +13,7 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 3
+  ttlSecondsAfterFinished: 60
   template:
     metadata:
       name: {{ include "valkey.fullname" . }}-pre-upgrade
@@ -24,53 +25,21 @@ spec:
       serviceAccountName: {{ include "valkey.fullname" . }}-pre-upgrade
       securityContext:
         runAsNonRoot: true
-        runAsUser: 65534
-        fsGroup: 65534
-      containers:
-        - name: pre-upgrade
+        runAsUser: 65532
+        fsGroup: 65532
+      initContainers:
+        {{- if eq .Values.architecture "sentinel" }}
+        # Delete master StatefulSet
+        - name: delete-master
           image: {{ .Values.preUpgradeHook.image.registry }}/{{ .Values.preUpgradeHook.image.repository }}:{{ .Values.preUpgradeHook.image.tag }}
           imagePullPolicy: {{ .Values.preUpgradeHook.image.pullPolicy }}
-          command:
-            - /bin/sh
-            - -c
-            - |
-              set -e
-              echo "=== Valkey Pre-Upgrade Hook ==="
-              echo "Checking for existing StatefulSets to clean up..."
-
-              NAMESPACE="{{ .Release.Namespace }}"
-
-              # Lista de StatefulSets a verificar según la arquitectura
-              STATEFULSETS=""
-
-              {{- if or (eq .Values.architecture "standalone") (eq .Values.architecture "sentinel") }}
-              # Master/Standalone StatefulSet
-              {{- if eq .Values.architecture "sentinel" }}
-              STATEFULSETS="${STATEFULSETS} {{ include "valkey.fullname" . }}-master"
-              {{- else }}
-              STATEFULSETS="${STATEFULSETS} {{ include "valkey.fullname" . }}"
-              {{- end }}
-              {{- end }}
-
-              {{- if eq .Values.architecture "sentinel" }}
-              # Replica StatefulSet
-              STATEFULSETS="${STATEFULSETS} {{ include "valkey.fullname" . }}-replica"
-              # Sentinel StatefulSet
-              STATEFULSETS="${STATEFULSETS} {{ include "valkey.fullname" . }}-sentinel"
-              {{- end }}
-
-              for STS_NAME in ${STATEFULSETS}; do
-                if kubectl get statefulset "${STS_NAME}" -n "${NAMESPACE}" >/dev/null 2>&1; then
-                  echo "Found StatefulSet: ${STS_NAME}"
-                  echo "Deleting StatefulSet ${STS_NAME} with --cascade=orphan to preserve pods and PVCs..."
-                  kubectl delete statefulset "${STS_NAME}" -n "${NAMESPACE}" --cascade=orphan
-                  echo "StatefulSet ${STS_NAME} deleted successfully (pods and PVCs preserved)"
-                else
-                  echo "StatefulSet ${STS_NAME} not found, skipping..."
-                fi
-              done
-
-              echo "=== Pre-upgrade cleanup completed successfully ==="
+          args:
+            - delete
+            - statefulset
+            - {{ include "valkey.fullname" . }}-master
+            - --namespace={{ .Release.Namespace }}
+            - --cascade=orphan
+            - --ignore-not-found=true
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -78,7 +47,94 @@ spec:
                 - ALL
             readOnlyRootFilesystem: true
             runAsNonRoot: true
-            runAsUser: 65534
+            runAsUser: 65532
+          {{- if .Values.preUpgradeHook.resources }}
+          resources: {{- toYaml .Values.preUpgradeHook.resources | nindent 12 }}
+          {{- end }}
+        # Delete replica StatefulSet
+        - name: delete-replica
+          image: {{ .Values.preUpgradeHook.image.registry }}/{{ .Values.preUpgradeHook.image.repository }}:{{ .Values.preUpgradeHook.image.tag }}
+          imagePullPolicy: {{ .Values.preUpgradeHook.image.pullPolicy }}
+          args:
+            - delete
+            - statefulset
+            - {{ include "valkey.fullname" . }}-replica
+            - --namespace={{ .Release.Namespace }}
+            - --cascade=orphan
+            - --ignore-not-found=true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+          {{- if .Values.preUpgradeHook.resources }}
+          resources: {{- toYaml .Values.preUpgradeHook.resources | nindent 12 }}
+          {{- end }}
+        # Delete sentinel StatefulSet
+        - name: delete-sentinel
+          image: {{ .Values.preUpgradeHook.image.registry }}/{{ .Values.preUpgradeHook.image.repository }}:{{ .Values.preUpgradeHook.image.tag }}
+          imagePullPolicy: {{ .Values.preUpgradeHook.image.pullPolicy }}
+          args:
+            - delete
+            - statefulset
+            - {{ include "valkey.fullname" . }}-sentinel
+            - --namespace={{ .Release.Namespace }}
+            - --cascade=orphan
+            - --ignore-not-found=true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+          {{- if .Values.preUpgradeHook.resources }}
+          resources: {{- toYaml .Values.preUpgradeHook.resources | nindent 12 }}
+          {{- end }}
+        {{- else }}
+        # Delete standalone StatefulSet
+        - name: delete-standalone
+          image: {{ .Values.preUpgradeHook.image.registry }}/{{ .Values.preUpgradeHook.image.repository }}:{{ .Values.preUpgradeHook.image.tag }}
+          imagePullPolicy: {{ .Values.preUpgradeHook.image.pullPolicy }}
+          args:
+            - delete
+            - statefulset
+            - {{ include "valkey.fullname" . }}
+            - --namespace={{ .Release.Namespace }}
+            - --cascade=orphan
+            - --ignore-not-found=true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+          {{- if .Values.preUpgradeHook.resources }}
+          resources: {{- toYaml .Values.preUpgradeHook.resources | nindent 12 }}
+          {{- end }}
+        {{- end }}
+      containers:
+        # Final container just to complete the job successfully
+        - name: complete
+          image: {{ .Values.preUpgradeHook.image.registry }}/{{ .Values.preUpgradeHook.image.repository }}:{{ .Values.preUpgradeHook.image.tag }}
+          imagePullPolicy: {{ .Values.preUpgradeHook.image.pullPolicy }}
+          args:
+            - version
+            - --client=true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
           {{- if .Values.preUpgradeHook.resources }}
           resources: {{- toYaml .Values.preUpgradeHook.resources | nindent 12 }}
           {{- end }}

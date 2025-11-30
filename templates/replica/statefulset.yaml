@@ -73,11 +73,11 @@ spec:
           image: {{ include "valkey.volumePermissions.image" . }}
           imagePullPolicy: {{ .Values.volumePermissions.image.pullPolicy | quote }}
           command:
-            - /bin/bash
+            - /bin/sh
           args:
             - -ec
             - |
-              chown -R 1001:1001 /data
+              chown -R {{ .Values.podSecurityContext.runAsUser }}:{{ .Values.podSecurityContext.fsGroup }} /data
           {{- if .Values.volumePermissions.containerSecurityContext.enabled }}
           securityContext: {{- omit .Values.volumePermissions.containerSecurityContext "enabled" | toYaml | nindent 12 }}
           {{- end }}
@@ -177,7 +177,7 @@ spec:
             failureThreshold: {{ .Values.replica.livenessProbe.failureThreshold }}
             exec:
               command:
-                - sh
+                - /usr/bin/bash
                 - -c
                 - /health/ping_liveness_local.sh 5
           readinessProbe:
@@ -188,7 +188,7 @@ spec:
             failureThreshold: {{ .Values.replica.readinessProbe.failureThreshold }}
             exec:
               command:
-                - sh
+                - /usr/bin/bash
                 - -c
                 - /health/ping_readiness_local.sh 1
           {{- end }}
