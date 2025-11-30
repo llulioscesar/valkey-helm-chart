@@ -12,190 +12,67 @@ metadata:
   {{- end }}
 data:
   ping_readiness_local.sh: |-
-    #!/bin/bash
-
+    #!/usr/bin/bash
     [[ -n "$VALKEY_PASSWORD" ]] && export REDISCLI_AUTH="$VALKEY_PASSWORD"
-    response=$(
-      timeout -s 15 $1 \
-      valkey-cli \
-        -h localhost \
-{{- if .Values.tls.enabled }}
-        -p {{ .Values.tls.port | default 6380 }} \
-        --tls \
-      {{- if .Values.tls.caCertFilename }}
-        --cacert {{ include "valkey.tls.caCertFilename" . }} \
-      {{- end }}
-      {{- if .Values.tls.authClients }}
-        --cert {{ include "valkey.tls.certFilename" . }} \
-        --key {{ include "valkey.tls.certKeyFilename" . }} \
-      {{- end }}
-{{- else }}
-        -p 6379 \
-{{- end }}
-        ping
-    )
-    if [ "$?" -eq "124" ]; then
-      echo "Timed out"
-      exit 1
-    fi
+    response=$(valkey-cli -h localhost -p {{ if .Values.tls.enabled }}{{ .Values.tls.port | default 6380 }}{{ else }}6379{{ end }} ping 2>&1)
     if [ "$response" != "PONG" ]; then
       echo "$response"
       exit 1
     fi
   ping_liveness_local.sh: |-
-    #!/bin/bash
-
+    #!/usr/bin/bash
     [[ -n "$VALKEY_PASSWORD" ]] && export REDISCLI_AUTH="$VALKEY_PASSWORD"
-    response=$(
-      timeout -s 15 $1 \
-      valkey-cli \
-        -h localhost \
-{{- if .Values.tls.enabled }}
-        -p {{ .Values.tls.port | default 6380 }} \
-        --tls \
-      {{- if .Values.tls.caCertFilename }}
-        --cacert {{ include "valkey.tls.caCertFilename" . }} \
-      {{- end }}
-      {{- if .Values.tls.authClients }}
-        --cert {{ include "valkey.tls.certFilename" . }} \
-        --key {{ include "valkey.tls.certKeyFilename" . }} \
-      {{- end }}
-{{- else }}
-        -p 6379 \
-{{- end }}
-        ping
-    )
-    if [ "$?" -eq "124" ]; then
-      echo "Timed out"
-      exit 1
+    response=$(valkey-cli -h localhost -p {{ if .Values.tls.enabled }}{{ .Values.tls.port | default 6380 }}{{ else }}6379{{ end }} ping 2>&1)
+    if [ "$response" = "PONG" ] || [[ "$response" == LOADING* ]] || [[ "$response" == MASTERDOWN* ]]; then
+      exit 0
     fi
-    responseFirstWord=$(echo $response | head -n1 | awk '{print $1;}')
-    if [ "$response" != "PONG" ] && [ "$responseFirstWord" != "LOADING" ] && [ "$responseFirstWord" != "MASTERDOWN" ]; then
-      echo "$response"
-      exit 1
-    fi
+    echo "$response"
+    exit 1
 {{- if eq .Values.architecture "sentinel" }}
   ping_sentinel.sh: |-
-    #!/bin/bash
-
+    #!/usr/bin/bash
 {{- if .Values.auth.sentinel }}
     [[ -f $VALKEY_PASSWORD_FILE ]] && export VALKEY_PASSWORD="$(< "${VALKEY_PASSWORD_FILE}")"
     [[ -n "$VALKEY_PASSWORD" ]] && export VALKEYCLI_AUTH="$VALKEY_PASSWORD"
 {{- end }}
-    response=$(
-      timeout -s 15 $1 \
-      valkey-cli \
-        -h localhost \
-{{- if (include "valkey.tls.enabled" .) }}
-        -p $VALKEY_SENTINEL_TLS_PORT_NUMBER \
-        --tls \
-      {{- if .Values.tls.caCertFilename }}
-        --cacert "$VALKEY_SENTINEL_TLS_CA_FILE" \
-      {{- end }}
-      {{- if .Values.tls.authClients }}
-        --cert "$VALKEY_SENTINEL_TLS_CERT_FILE" \
-        --key "$VALKEY_SENTINEL_TLS_KEY_FILE" \
-      {{- end }}
-{{- else }}
-        -p $VALKEY_SENTINEL_PORT \
-{{- end }}
-        ping
-    )
-    if [ "$?" -eq "124" ]; then
-      echo "Timed out"
-      exit 1
-    fi
+    SENTINEL_PORT=${VALKEY_SENTINEL_PORT:-26379}
+    response=$(valkey-cli -h localhost -p $SENTINEL_PORT ping 2>&1)
     if [ "$response" != "PONG" ]; then
       echo "$response"
       exit 1
     fi
-  parse_sentinels.awk: |-
-    /ip/ {FOUND_IP=1}
-    /port/ {FOUND_PORT=1}
-    /runid/ {FOUND_RUNID=1}
-    !/ip|port|runid/ {
-      if (FOUND_IP==1) {
-        IP=$1; FOUND_IP=0;
-      }
-      else if (FOUND_PORT==1) {
-        PORT=$1;
-        FOUND_PORT=0;
-      } else if (FOUND_RUNID==1) {
-        printf "\nsentinel known-sentinel {{ .Values.sentinel.masterSet }} %s %s %s", IP, PORT, $0; FOUND_RUNID=0;
-      }
-    }
-{{- end }}
   ping_readiness_master.sh: |-
-    #!/bin/bash
-
+    #!/usr/bin/bash
     [[ -f $VALKEY_MASTER_PASSWORD_FILE ]] && export VALKEY_MASTER_PASSWORD="$(< "${VALKEY_MASTER_PASSWORD_FILE}")"
     [[ -n "$VALKEY_MASTER_PASSWORD" ]] && export VALKEYCLI_AUTH="$VALKEY_MASTER_PASSWORD"
-    response=$(
-      timeout -s 15 $1 \
-      valkey-cli \
-        -h $VALKEY_MASTER_HOST \
-        -p $VALKEY_MASTER_PORT_NUMBER \
-{{- if (include "valkey.tls.enabled" .) }}
-        --tls \
-      {{- if .Values.tls.caCertFilename }}
-        --cacert {{ include "valkey.tls.caCertFilename" . }} \
-      {{- end }}
-      {{- if .Values.tls.authClients }}
-        --cert {{ include "valkey.tls.certFilename" . }} \
-        --key {{ include "valkey.tls.certKeyFilename" . }} \
-      {{- end }}
-{{- end }}
-        ping
-    )
-    if [ "$?" -eq "124" ]; then
-      echo "Timed out"
-      exit 1
-    fi
+    response=$(valkey-cli -h $VALKEY_MASTER_HOST -p $VALKEY_MASTER_PORT_NUMBER ping 2>&1)
     if [ "$response" != "PONG" ]; then
       echo "$response"
       exit 1
     fi
   ping_liveness_master.sh: |-
-    #!/bin/bash
-
+    #!/usr/bin/bash
     [[ -f $VALKEY_MASTER_PASSWORD_FILE ]] && export VALKEY_MASTER_PASSWORD="$(< "${VALKEY_MASTER_PASSWORD_FILE}")"
     [[ -n "$VALKEY_MASTER_PASSWORD" ]] && export VALKEYCLI_AUTH="$VALKEY_MASTER_PASSWORD"
-    response=$(
-      timeout -s 15 $1 \
-      valkey-cli \
-        -h $VALKEY_MASTER_HOST \
-        -p $VALKEY_MASTER_PORT_NUMBER \
-{{- if (include "valkey.tls.enabled" .) }}
-        --tls \
-      {{- if .Values.tls.caCertFilename }}
-        --cacert {{ include "valkey.tls.caCertFilename" . }} \
-      {{- end }}
-      {{- if .Values.tls.authClients }}
-        --cert {{ include "valkey.tls.certFilename" . }} \
-        --key {{ include "valkey.tls.certKeyFilename" . }} \
-      {{- end }}
-{{- end }}
-        ping
-    )
-    if [ "$?" -eq "124" ]; then
-      echo "Timed out"
-      exit 1
+    response=$(valkey-cli -h $VALKEY_MASTER_HOST -p $VALKEY_MASTER_PORT_NUMBER ping 2>&1)
+    if [ "$response" = "PONG" ] || [[ "$response" == LOADING* ]]; then
+      exit 0
     fi
-    responseFirstWord=$(echo $response | head -n1 | awk '{print $1;}')
-    if [ "$response" != "PONG" ] && [ "$responseFirstWord" != "LOADING" ]; then
-      echo "$response"
-      exit 1
-    fi
+    echo "$response"
+    exit 1
   ping_readiness_local_and_master.sh: |-
+    #!/usr/bin/bash
     script_dir="$(dirname "$0")"
     exit_status=0
-    "$script_dir/ping_readiness_local.sh" $1 || exit_status=$?
-    "$script_dir/ping_readiness_master.sh" $1 || exit_status=$?
+    "$script_dir/ping_readiness_local.sh" || exit_status=$?
+    "$script_dir/ping_readiness_master.sh" || exit_status=$?
     exit $exit_status
   ping_liveness_local_and_master.sh: |-
+    #!/usr/bin/bash
     script_dir="$(dirname "$0")"
     exit_status=0
-    "$script_dir/ping_liveness_local.sh" $1 || exit_status=$?
-    "$script_dir/ping_liveness_master.sh" $1 || exit_status=$?
+    "$script_dir/ping_liveness_local.sh" || exit_status=$?
+    "$script_dir/ping_liveness_master.sh" || exit_status=$?
     exit $exit_status
+{{- end }}
 {{- end }}

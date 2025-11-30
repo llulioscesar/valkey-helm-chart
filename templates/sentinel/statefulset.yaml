@@ -73,9 +73,29 @@ spec:
           securityContext: {{- omit .Values.sentinel.containerSecurityContext "enabled" | toYaml | nindent 12 }}
           {{- end }}
           command:
-            - valkey-sentinel
+            - /usr/bin/bash
           args:
-            - /etc/valkey/sentinel.conf
+            - -c
+            - |
+              # Wait for master service to be resolvable
+              until getent hosts {{ include "valkey.master.serviceName" . }}; do
+                echo "Waiting for master DNS to be resolvable..."
+                sleep 1
+              done
+              # Get master IP (getent returns "IP hostname", we need only IP)
+              MASTER_LINE=$(getent hosts {{ include "valkey.master.serviceName" . }})
+              MASTER_IP=${MASTER_LINE%% *}
+              echo "Master resolved to: $MASTER_IP"
+              # Copy config to /tmp and add sentinel monitor with resolved IP
+              cp /etc/valkey/sentinel.conf /tmp/sentinel.conf
+              echo "sentinel monitor {{ .Values.sentinel.masterSet }} $MASTER_IP {{ include "valkey.port" . }} {{ .Values.sentinel.quorum }}" >> /tmp/sentinel.conf
+              echo "sentinel down-after-milliseconds {{ .Values.sentinel.masterSet }} {{ .Values.sentinel.downAfterMilliseconds }}" >> /tmp/sentinel.conf
+              echo "sentinel failover-timeout {{ .Values.sentinel.masterSet }} {{ .Values.sentinel.failoverTimeout }}" >> /tmp/sentinel.conf
+              echo "sentinel parallel-syncs {{ .Values.sentinel.masterSet }} {{ .Values.sentinel.parallelSyncs }}" >> /tmp/sentinel.conf
+              {{- if (include "valkey.auth.enabled" .) }}
+              echo "sentinel auth-pass {{ .Values.sentinel.masterSet }} $VALKEY_PASSWORD" >> /tmp/sentinel.conf
+              {{- end }}
+              exec valkey-sentinel /tmp/sentinel.conf
           env:
             - name: VALKEY_SENTINEL_ENABLED
               value: "yes"
@@ -158,7 +178,7 @@ spec:
             failureThreshold: {{ .Values.sentinel.livenessProbe.failureThreshold }}
             exec:
               command:
-                - sh
+                - /usr/bin/bash
                 - -c
                 - /health/ping_sentinel.sh 5
           readinessProbe:
@@ -169,7 +189,7 @@ spec:
             failureThreshold: {{ .Values.sentinel.readinessProbe.failureThreshold }}
             exec:
               command:
-                - sh
+                - /usr/bin/bash
                 - -c
                 - /health/ping_sentinel.sh 1
           {{- end }}
@@ -179,6 +199,8 @@ spec:
           volumeMounts:
             - name: health
               mountPath: /health
+            - name: tmp
+              mountPath: /tmp
             {{- if (include "valkey.createConfigmap" .) }}
             - name: config
               mountPath: /etc/valkey
@@ -260,6 +282,8 @@ spec:
           configMap:
             name: {{ printf "%s-health" (include "valkey.fullname" .) }}
             defaultMode: 0755
+        - name: tmp
+          emptyDir: {}
         {{- if (include "valkey.createConfigmap" .) }}
         - name: config
           configMap:

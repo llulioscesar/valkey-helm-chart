@@ -12,10 +12,11 @@ global:
 clusterDomain: cluster.local
 
 # Valkey image configuration
+# Using Chainguard images for zero CVE security
 image:
-  registry: docker.io
-  repository: valkey/valkey
-  tag: "9.0.0"
+  registry: cgr.dev
+  repository: chainguard/valkey
+  tag: "latest"
   pullPolicy: IfNotPresent
 
 # Common configuration
@@ -48,10 +49,11 @@ serviceAccount:
   name: ""
 
 # Pod Security Context
+# Chainguard images run as user 65532
 podSecurityContext:
-  fsGroup: 999
-  runAsUser: 999
-  runAsGroup: 999
+  fsGroup: 65532
+  runAsUser: 65532
+  runAsGroup: 65532
 
 # Security Context
 securityContext:
@@ -61,7 +63,7 @@ securityContext:
     - ALL
   readOnlyRootFilesystem: true
   runAsNonRoot: true
-  runAsUser: 999
+  runAsUser: 65532
 
 # Common annotations and labels
 commonAnnotations: {}
@@ -129,9 +131,9 @@ sentinel:
   parallelSyncs: 1
 
   image:
-    registry: docker.io
-    repository: valkey/valkey
-    tag: "9.0.0"
+    registry: cgr.dev
+    repository: chainguard/valkey
+    tag: "latest"
     pullPolicy: IfNotPresent
 
   serviceAccount:
@@ -142,9 +144,9 @@ sentinel:
 
   podSecurityContext:
     enabled: true
-    fsGroup: 999
-    runAsUser: 999
-    runAsGroup: 999
+    fsGroup: 65532
+    runAsUser: 65532
+    runAsGroup: 65532
 
   containerSecurityContext:
     enabled: true
@@ -154,7 +156,7 @@ sentinel:
       - ALL
     readOnlyRootFilesystem: true
     runAsNonRoot: true
-    runAsUser: 999
+    runAsUser: 65532
 
   resources:
     limits:
@@ -212,6 +214,11 @@ sentinel:
   initContainers: []
   sidecars: []
 
+  configuration: |-
+    # Valkey Sentinel configuration
+    port 26379
+    dir /tmp
+
 # Master configuration for sentinel mode
 master:
   replicaCount: 1
@@ -224,9 +231,9 @@ master:
 
   podSecurityContext:
     enabled: true
-    fsGroup: 999
-    runAsUser: 999
-    runAsGroup: 999
+    fsGroup: 65532
+    runAsUser: 65532
+    runAsGroup: 65532
 
   containerSecurityContext:
     enabled: true
@@ -236,7 +243,7 @@ master:
       - ALL
     readOnlyRootFilesystem: true
     runAsNonRoot: true
-    runAsUser: 999
+    runAsUser: 65532
 
   resources:
     limits:
@@ -337,9 +344,9 @@ replica:
 
   podSecurityContext:
     enabled: true
-    fsGroup: 999
-    runAsUser: 999
-    runAsGroup: 999
+    fsGroup: 65532
+    runAsUser: 65532
+    runAsGroup: 65532
 
   containerSecurityContext:
     enabled: true
@@ -349,7 +356,7 @@ replica:
       - ALL
     readOnlyRootFilesystem: true
     runAsNonRoot: true
-    runAsUser: 999
+    runAsUser: 65532
 
   resources:
     limits:
@@ -448,7 +455,7 @@ metrics:
       - ALL
     readOnlyRootFilesystem: true
     runAsNonRoot: true
-    runAsUser: 999
+    runAsUser: 65532
 
   resources:
     limits:
@@ -522,13 +529,12 @@ metrics:
     rules: []
 
 # Pre-upgrade hook configuration
-# Uses Alpine with kubectl binary from official Kubernetes releases
-# This avoids paid/deprecated Bitnami images
+# Uses Chainguard kubectl image (zero CVE, distroless)
 preUpgradeHook:
   image:
-    registry: docker.io
-    repository: alpine/k8s
-    tag: "1.31.13"
+    registry: cgr.dev
+    repository: chainguard/kubectl
+    tag: "latest"
     pullPolicy: IfNotPresent
 
   resources:
@@ -542,9 +548,9 @@ preUpgradeHook:
 volumePermissions:
   enabled: false
   image:
-    registry: docker.io
-    repository: alpine
-    tag: "3.22.2"
+    registry: cgr.dev
+    repository: chainguard/wolfi-base
+    tag: "latest"
     pullPolicy: IfNotPresent
 
   containerSecurityContext:

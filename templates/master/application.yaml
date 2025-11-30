@@ -65,7 +65,7 @@ spec:
           image: {{ .Values.volumePermissions.image.registry }}/{{ .Values.volumePermissions.image.repository }}:{{ .Values.volumePermissions.image.tag }}
           imagePullPolicy: {{ .Values.volumePermissions.image.pullPolicy }}
           command:
-            - /bin/bash
+            - /bin/sh
             - -ec
             - |
               chown -R {{ .Values.podSecurityContext.runAsUser }}:{{ .Values.podSecurityContext.fsGroup }} /data
@@ -85,7 +85,7 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           command:
-            - /bin/bash
+            - /usr/bin/bash
           args:
             - -c
             - |
@@ -94,9 +94,9 @@ spec:
               # Copy config and add requirepass
               cp /etc/valkey/valkey.conf /tmp/valkey.conf
               echo "requirepass $VALKEY_PASSWORD" >> /tmp/valkey.conf
-              valkey-server /tmp/valkey.conf
+              exec valkey-server /tmp/valkey.conf
               {{- else }}
-              valkey-server /etc/valkey/valkey.conf
+              exec valkey-server /etc/valkey/valkey.conf
               {{- end }}
           env:
             {{- if .Values.auth.enabled }}
@@ -118,7 +118,7 @@ spec:
             failureThreshold: 3
             exec:
               command:
-                - sh
+                - /usr/bin/bash
                 - -c
                 - /health/ping_liveness_local.sh 5
           readinessProbe:
@@ -129,7 +129,7 @@ spec:
             failureThreshold: 3
             exec:
               command:
-                - sh
+                - /usr/bin/bash
                 - -c
                 - /health/ping_readiness_local.sh 1
           {{- if eq .Values.architecture "sentinel" }}
@@ -147,8 +147,8 @@ spec:
             - name: valkey-data
               mountPath: /data
             - name: config
-              mountPath: /opt/valkey/etc/valkey.conf
-              subPath: valkey.conf
+              mountPath: /etc/valkey/valkey.conf
+              subPath: {{ if eq .Values.architecture "sentinel" }}master.conf{{ else }}valkey.conf{{ end }}
             - name: tmp
               mountPath: /tmp
         {{- if .Values.metrics.enabled }}
@@ -233,7 +233,7 @@ spec:
             defaultMode: 0755
         - name: config
           configMap:
-            name: {{ if eq .Values.architecture "sentinel" }}{{ printf "%s-master" (include "valkey.fullname" .) }}{{ else }}{{ include "valkey.fullname" . }}{{ end }}
+            name: {{ include "valkey.fullname" . }}
         - name: tmp
           emptyDir: {}
   {{- if or (and (eq .Values.architecture "sentinel") .Values.master.persistence.enabled) (and (ne .Values.architecture "sentinel") .Values.standalone.persistence.enabled) }}
