@@ -3,6 +3,8 @@
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/valkey-redis)](https://artifacthub.io/packages/helm/valkey-redis/valkey)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Helm](https://img.shields.io/badge/Helm-3.x-blue)](https://helm.sh)
+[![Auto-Update](https://img.shields.io/badge/Auto--Update-Weekly-green)](https://github.com/start-codex/valkey-helm-chart/actions/workflows/update-valkey-version.yml)
+[![Chainguard](https://img.shields.io/badge/Images-Chainguard%20%7C%20Zero%20CVE-brightgreen)](https://www.chainguard.dev/)
 
 <p align="center">
   <img src="https://valkey.io/img/valkey-logo-og.png" alt="Valkey Logo" width="300">
@@ -14,6 +16,7 @@ Helm chart for deploying [Valkey](https://valkey.io/) on Kubernetes. Valkey is a
 
 - [Features](#features)
 - [Requirements](#requirements)
+- [Image Versioning Strategy](#image-versioning-strategy)
 - [Quick Start](#quick-start)
 - [Architectures](#architectures)
 - [Configuration](#configuration)
@@ -45,6 +48,35 @@ Helm chart for deploying [Valkey](https://valkey.io/) on Kubernetes. Valkey is a
 |-----------|---------|
 | Kubernetes | >= 1.23 |
 | Helm | >= 3.8 |
+
+## Image Versioning Strategy
+
+This chart uses **Chainguard's zero-CVE Valkey images** for enhanced security.
+
+### Why `latest` tag?
+
+- **Free tier limitation**: Chainguard's free tier only provides the `latest` tag
+- **Automatic updates**: Using `latest` ensures you always get the most recent security patches
+- **Zero CVEs**: Chainguard images are rebuilt continuously to maintain zero known vulnerabilities
+
+### Version tracking
+
+- **appVersion in Chart.yaml**: Reflects the current Valkey version available in `cgr.dev/chainguard/valkey:latest`
+- **Automated updates**: A GitHub Action checks weekly for version updates and creates PRs automatically
+- **Transparency**: Every version change is tracked via pull requests and changelog entries
+
+### For production use
+
+If you require **version pinning** for production:
+
+```yaml
+# Override with a specific version (requires Chainguard Pro or alternative registry)
+image:
+  repository: valkey/valkey  # Official Valkey images
+  tag: "9.0.0"               # Specific version tag
+```
+
+> **Note**: Using `latest` provides continuous security updates but means deployments may pull different versions over time. For strict reproducibility, consider using image digests or switching to a registry that provides versioned tags.
 
 ## Quick Start
 

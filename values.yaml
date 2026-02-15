@@ -13,10 +13,20 @@ clusterDomain: cluster.local
 
 # Valkey image configuration
 # Using Chainguard images for zero CVE security
+#
+# Why 'latest' tag?
+# - Chainguard free tier only provides 'latest' tag
+# - Ensures automatic security updates and zero known CVEs
+# - appVersion in Chart.yaml tracks the actual version (auto-updated weekly)
+#
+# For production with version pinning, override with:
+#   image:
+#     repository: valkey/valkey  # Official Valkey registry
+#     tag: "9.0.0"               # Specific version
 image:
   registry: cgr.dev
   repository: chainguard/valkey
-  tag: "latest"
+  tag: "latest"  # Auto-updated by Chainguard, version tracked in Chart.yaml appVersion
   pullPolicy: IfNotPresent
 
 # Common configuration
@@ -130,10 +140,12 @@ sentinel:
   failoverTimeout: 180000
   parallelSyncs: 1
 
+  # Sentinel uses the same Chainguard Valkey image (includes sentinel binary)
+  # See main image configuration above for versioning strategy
   image:
     registry: cgr.dev
     repository: chainguard/valkey
-    tag: "latest"
+    tag: "latest"  # Matches main Valkey image tag
     pullPolicy: IfNotPresent
 
   serviceAccount:

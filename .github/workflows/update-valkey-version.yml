@@ -1,0 +1,144 @@
+name: Update Valkey Version
+
+on:
+  schedule:
+    # Runs every Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # Allows manual trigger
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get Valkey version from Chainguard image
+        id: get-version
+        run: |
+          # Pull the latest Chainguard Valkey image
+          docker pull cgr.dev/chainguard/valkey:latest
+
+          # Get Valkey version from the container
+          # Using sed for better compatibility (works on both Linux and macOS)
+          VERSION=$(docker run --rm cgr.dev/chainguard/valkey:latest --version | sed -n 's/.*v=\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p')
+
+          if [ -z "$VERSION" ]; then
+            echo "Failed to detect Valkey version"
+            exit 1
+          fi
+
+          echo "detected_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected Valkey version: $VERSION"
+
+      - name: Get current appVersion from Chart.yaml
+        id: current-version
+        run: |
+          CURRENT=$(grep '^appVersion:' Chart.yaml | awk '{print $2}' | tr -d '"')
+          echo "current_version=$CURRENT" >> $GITHUB_OUTPUT
+          echo "Current appVersion: $CURRENT"
+
+      - name: Compare versions
+        id: compare
+        run: |
+          DETECTED="${{ steps.get-version.outputs.detected_version }}"
+          CURRENT="${{ steps.current-version.outputs.current_version }}"
+
+          if [ "$DETECTED" != "$CURRENT" ]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "Version mismatch detected: $CURRENT -> $DETECTED"
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "Version is up to date: $CURRENT"
+          fi
+
+      - name: Update Chart.yaml
+        if: steps.compare.outputs.needs_update == 'true'
+        run: |
+          NEW_VERSION="${{ steps.get-version.outputs.detected_version }}"
+
+          # Update appVersion in Chart.yaml
+          sed -i "s/^appVersion: .*/appVersion: \"$NEW_VERSION\"/" Chart.yaml
+
+          # Bump patch version of chart
+          CHART_VERSION=$(grep '^version:' Chart.yaml | awk '{print $2}')
+          # Simple patch bump (you might want to use semver tool for production)
+          NEW_CHART_VERSION=$(echo $CHART_VERSION | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
+          sed -i "s/^version: .*/version: $NEW_CHART_VERSION/" Chart.yaml
+
+          echo "Updated appVersion to $NEW_VERSION"
+          echo "Updated chart version to $NEW_CHART_VERSION"
+
+      - name: Update CHANGELOG
+        if: steps.compare.outputs.needs_update == 'true'
+        run: |
+          NEW_VERSION="${{ steps.get-version.outputs.detected_version }}"
+          CHART_VERSION=$(grep '^version:' Chart.yaml | awk '{print $2}')
+          DATE=$(date +%Y-%m-%d)
+
+          # Create or update CHANGELOG
+          if [ ! -f CHANGELOG.md ]; then
+            echo "# Changelog" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+
+          # Add new entry
+          sed -i "3i\\
+## [$CHART_VERSION] - $DATE\n\\
+\n\\
+### Changed\n\\
+- Updated Valkey to version $NEW_VERSION (from Chainguard latest image)\n" CHANGELOG.md
+
+      - name: Create Pull Request
+        if: steps.compare.outputs.needs_update == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: |
+            chore: update Valkey to version ${{ steps.get-version.outputs.detected_version }}
+
+            - Updated appVersion from ${{ steps.current-version.outputs.current_version }} to ${{ steps.get-version.outputs.detected_version }}
+            - Automatically detected from cgr.dev/chainguard/valkey:latest
+
+            Co-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>
+          branch: auto-update-valkey-${{ steps.get-version.outputs.detected_version }}
+          delete-branch: true
+          title: "chore: update Valkey to version ${{ steps.get-version.outputs.detected_version }}"
+          body: |
+            ## 🤖 Automated Valkey Version Update
+
+            This PR was automatically created by the version checker workflow.
+
+            ### Changes
+            - **Valkey version**: `${{ steps.current-version.outputs.current_version }}` → `${{ steps.get-version.outputs.detected_version }}`
+            - **Source**: Detected from `cgr.dev/chainguard/valkey:latest`
+            - **Chart version**: Bumped patch version
+
+            ### Verification
+            The version was detected by pulling the latest Chainguard Valkey image and running `--version`.
+
+            ### Next Steps
+            - Review the changes
+            - Merge to trigger a new chart release
+            - The release workflow will automatically publish to GitHub Pages
+
+            ---
+            🔄 This check runs weekly on Mondays at 9:00 AM UTC
+          labels: |
+            automated
+            version-update
+            dependencies
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.compare.outputs.needs_update }}" == "true" ]; then
+            echo "✅ Version update PR created: ${{ steps.current-version.outputs.current_version }} → ${{ steps.get-version.outputs.detected_version }}"
+          else
+            echo "✅ No update needed. Current version ${{ steps.current-version.outputs.current_version }} is up to date."
+          fi
