@@ -88,12 +88,17 @@ jobs:
             echo "" >> CHANGELOG.md
           fi
 
-          # Add new entry
-          sed -i "3i\\
-## [$CHART_VERSION] - $DATE\n\\
-\n\\
-### Changed\n\\
-- Updated Valkey to version $NEW_VERSION (from Chainguard latest image)\n" CHANGELOG.md
+          # Add new entry using a temp file (compatible with both Linux and macOS)
+          {
+            head -n 2 CHANGELOG.md
+            echo ""
+            echo "## [$CHART_VERSION] - $DATE"
+            echo ""
+            echo "### Changed"
+            echo "- Updated Valkey to version $NEW_VERSION (from Chainguard latest image)"
+            echo ""
+            tail -n +3 CHANGELOG.md
+          } > CHANGELOG.tmp && mv CHANGELOG.tmp CHANGELOG.md
 
       - name: Create Pull Request
         if: steps.compare.outputs.needs_update == 'true'
