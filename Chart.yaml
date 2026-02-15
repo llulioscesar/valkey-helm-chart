@@ -21,20 +21,22 @@ annotations:
     - name: wolfi-base
       image: cgr.dev/chainguard/wolfi-base:latest
     - name: redis-exporter
-      image: docker.io/oliver006/redis_exporter:v1.80.0
+      image: cgr.dev/chainguard/prometheus-redis-exporter:latest
     - name: kubectl
       image: cgr.dev/chainguard/kubectl:latest
   artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
     - kind: security
-      description: Switch to Chainguard images for zero CVE (valkey, kubectl, wolfi-base)
+      description: Switch to Chainguard images for zero CVE (valkey, kubectl, wolfi-base, prometheus-redis-exporter)
     - kind: changed
       description: Update container user from 999 to 65532 (Chainguard default)
     - kind: changed
       description: Simplify health check scripts for distroless compatibility
     - kind: changed
       description: Update pre-upgrade hook to work without shell
+    - kind: added
+      description: Automated version checking workflow for weekly updates
 keywords:
   - valkey
   - redis
