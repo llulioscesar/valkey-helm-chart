@@ -453,10 +453,11 @@ metrics:
   enabled: false
   port: 9121
 
+  # Using Chainguard image for zero CVE security (same as Valkey)
   image:
-    registry: docker.io
-    repository: oliver006/redis_exporter
-    tag: "v1.80.0"
+    registry: cgr.dev
+    repository: chainguard/prometheus-redis-exporter
+    tag: "latest"
     pullPolicy: IfNotPresent
 
   containerSecurityContext:

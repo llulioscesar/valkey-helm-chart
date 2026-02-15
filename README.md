@@ -203,8 +203,8 @@ helm install my-valkey valkey/valkey \
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `metrics.enabled` | Enable Prometheus exporter | `false` |
-| `metrics.image.repository` | Exporter image | `oliver006/redis_exporter` |
-| `metrics.image.tag` | Exporter tag | `v1.80.0` |
+| `metrics.image.repository` | Exporter image | `chainguard/prometheus-redis-exporter` |
+| `metrics.image.tag` | Exporter tag | `latest` |
 | `metrics.serviceMonitor.enabled` | Create ServiceMonitor | `false` |
 | `metrics.podMonitor.enabled` | Create PodMonitor | `false` |
 
