@@ -2,8 +2,8 @@ apiVersion: v2
 name: valkey
 description: Valkey is an open source, high-performance data structure server compatible with Redis. It supports strings, hashes, lists, sets, and sorted sets.
 type: application
-version: 0.2.3
-appVersion: "9.0.2"
+version: 0.2.4
+appVersion: "9.1.2"
 annotations:
   artifacthub.io/signKey: |
     fingerprint: 35D9AD8B98D2FB5AF685CABA019335D0A0561140
@@ -21,7 +21,7 @@ annotations:
     - name: wolfi-base
       image: cgr.dev/chainguard/wolfi-base:latest
     - name: redis-exporter
-      image: docker.io/oliver006/redis_exporter:v1.81.0
+      image: docker.io/oliver006/redis_exporter:v1.91.0
     - name: kubectl
       image: cgr.dev/chainguard/kubectl:latest
   artifacthub.io/containsSecurityUpdates: "true"
