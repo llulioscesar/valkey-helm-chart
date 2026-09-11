@@ -2,7 +2,7 @@ apiVersion: v2
 name: valkey
 description: Valkey is an open source, high-performance data structure server compatible with Redis. It supports strings, hashes, lists, sets, and sorted sets.
 type: application
-version: 0.2.7
+version: 0.2.8
 appVersion: "9.0.3"
 annotations:
   artifacthub.io/signKey: |
@@ -27,18 +27,22 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
-    - kind: changed
-      description: Update redis-exporter to v1.81.0 (from v1.80.0)
-    - kind: changed
-      description: Remove bash dependency from metrics exporter templates
-    - kind: changed
-      description: Switch to Chainguard images for zero CVE (valkey, kubectl, wolfi-base)
-    - kind: changed
-      description: Update container user from 999 to 65532 (Chainguard default)
-    - kind: changed
-      description: Simplify health check scripts for distroless compatibility
+    - kind: fixed
+      description: Sentinel mode now replicates with auth (requirepass and masterauth on master and replicas)
+    - kind: fixed
+      description: sentinel.conf rendered for architecture sentinel instead of sentinel.enabled
+    - kind: fixed
+      description: Sentinel and data pods discover the current master instead of the master Service IP, so clients follow failovers
+    - kind: fixed
+      description: Restarted sentinels reuse their config instead of looping on Duplicate master name
+    - kind: fixed
+      description: replica.affinity no longer breaks rendering
+    - kind: fixed
+      description: Standalone with auth no longer starts with a config missing everything but requirepass (cp is absent from the Chainguard image)
     - kind: added
-      description: Automated version checking workflow for weekly updates
+      description: startupProbe for master, replica and sentinel in sentinel mode
+    - kind: changed
+      description: Sentinel defaults parallelSyncs 10 and failoverTimeout 30000 so stale replica entries cannot stall a failover
 keywords:
   - valkey
   - redis

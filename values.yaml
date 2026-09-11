@@ -137,8 +137,15 @@ sentinel:
   quorum: 2
   masterSet: mymaster
   downAfterMilliseconds: 30000
-  failoverTimeout: 180000
-  parallelSyncs: 1
+  # Pods get a new IP on every restart, and Sentinel keeps the old address as an
+  # s_down replica forever. With parallel-syncs 1 the failover leader can spend its
+  # only reconfiguration slot on one of those dead addresses; the per-replica timeout
+  # is only evaluated while a slot is free, so the failover then lasts the whole
+  # failover-timeout, during which the leader still reports the old master in
+  # SENTINEL MASTERS. Keep parallelSyncs above the number of stale entries and
+  # failoverTimeout short.
+  failoverTimeout: 30000
+  parallelSyncs: 10
 
   # Sentinel uses the same Chainguard Valkey image (includes sentinel binary)
   # See main image configuration above for versioning strategy
@@ -176,6 +183,16 @@ sentinel:
     requests:
       cpu: 100m
       memory: 128Mi
+
+  # Covers the startup script, which may wait for a reachable master before
+  # launching the server. Liveness and readiness only start after it succeeds,
+  # so the wait is not killed. Default window: 5s x 60 = 5 minutes.
+  startupProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 60
 
   livenessProbe:
     enabled: true
@@ -263,6 +280,16 @@ master:
     requests:
       cpu: 100m
       memory: 128Mi
+
+  # Covers the startup script, which may wait for a reachable master before
+  # launching the server. Liveness and readiness only start after it succeeds,
+  # so the wait is not killed. Default window: 5s x 60 = 5 minutes.
+  startupProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 60
 
   livenessProbe:
     enabled: true
@@ -376,6 +403,16 @@ replica:
     requests:
       cpu: 100m
       memory: 128Mi
+
+  # Covers the startup script, which may wait for a reachable master before
+  # launching the server. Liveness and readiness only start after it succeeds,
+  # so the wait is not killed. Default window: 5s x 60 = 5 minutes.
+  startupProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 60
 
   livenessProbe:
     enabled: true

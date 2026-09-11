@@ -50,7 +50,7 @@ spec:
       priorityClassName: {{ .Values.replica.priorityClassName | quote }}
       {{- end }}
       {{- if .Values.replica.affinity }}
-      affinity: {{- include "valkey.replica.affinity" . | nindent 8 }}
+      affinity: {{- toYaml .Values.replica.affinity | nindent 8 }}
       {{- end }}
       {{- if .Values.replica.nodeSelector }}
       nodeSelector: {{- toYaml .Values.replica.nodeSelector | nindent 8 }}
@@ -99,13 +99,35 @@ spec:
           securityContext: {{- omit .Values.replica.containerSecurityContext "enabled" | toYaml | nindent 12 }}
           {{- end }}
           command:
-            - valkey-server
+            - /usr/bin/bash
           args:
-            - /etc/valkey/replica.conf
-            - --replicaof
-            - "$(VALKEY_MASTER_HOST)"
-            - "$(VALKEY_MASTER_PORT)"
+            - -c
+            - |
+              {{- include "valkey.sentinel.discoverMaster" . | nindent 14 }}
+              conf=/tmp/replica.conf
+              printf '%s\n' "$(< /etc/valkey/replica.conf)" > "$conf"
+              {{- if (include "valkey.auth.enabled" .) }}
+              printf 'requirepass %s\nmasterauth %s\n' "$VALKEY_PASSWORD" "$VALKEY_PASSWORD" >> "$conf"
+              {{- end }}
+              until master_ip=$(discover_master); do
+                if [[ "$(sentinel_master)" == "$POD_IP" ]]; then
+                  master_ip=$POD_IP
+                  break
+                fi
+                echo "Waiting for a reachable master..."
+                pause 2
+              done
+              if [[ "$master_ip" != "$POD_IP" ]]; then
+                printf 'replicaof %s %s\n' "$master_ip" "$VALKEY_MASTER_PORT" >> "$conf"
+              else
+                echo "Sentinels report this pod as master: starting without replicaof"
+              fi
+              exec valkey-server "$conf"
           env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: VALKEY_MASTER_HOST
               value: {{ include "valkey.master.serviceName" . }}
             - name: VALKEY_MASTER_PORT
@@ -169,6 +191,19 @@ spec:
               protocol: TCP
             {{- end }}
           {{- if not .Values.diagnosticMode.enabled }}
+          {{- if .Values.replica.startupProbe.enabled }}
+          startupProbe:
+            initialDelaySeconds: {{ .Values.replica.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.replica.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.replica.startupProbe.timeoutSeconds }}
+            successThreshold: 1
+            failureThreshold: {{ .Values.replica.startupProbe.failureThreshold }}
+            exec:
+              command:
+                - /usr/bin/bash
+                - -c
+                - /health/ping_liveness_local.sh 5
+          {{- end }}
           livenessProbe:
             initialDelaySeconds: {{ .Values.replica.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.replica.livenessProbe.periodSeconds }}
@@ -198,6 +233,8 @@ spec:
           volumeMounts:
             - name: health
               mountPath: /health
+            - name: tmp
+              mountPath: /tmp
             {{- if (include "valkey.createConfigmap" .) }}
             - name: config
               mountPath: /etc/valkey
@@ -278,6 +315,8 @@ spec:
           configMap:
             name: {{ printf "%s-health" (include "valkey.fullname" .) }}
             defaultMode: 0755
+        - name: tmp
+          emptyDir: {}
         {{- if (include "valkey.createConfigmap" .) }}
         - name: config
           configMap:

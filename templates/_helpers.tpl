@@ -616,3 +616,67 @@ Return the appropriate storageClass for standalone
   {{- end -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+Bash functions to find the current master in sentinel mode.
+- sentinel_master: the raw answer of the sentinels (may be stale).
+- discover_master: a master that is actually reachable. A sentinel answer is
+  only trusted if that address replies ROLE master: right after a master pod
+  restart the sentinels still report its old, dead IP until they fail over.
+  Returns 0 with the IP, 1 when the sentinels know a master that is not
+  reachable yet (wait for their failover), 2 when no sentinel answered and
+  --sentinels-only was given. Without that flag, a fresh install (no sentinel
+  answer) scans the headless service for the pod whose ROLE is master.
+  --scan-if-stale also scans when the sentinel answer is unreachable. Only a
+  starting sentinel uses it: if the running sentinels are stuck on a dead
+  master they cannot replace, a new sentinel must find the real one instead of
+  waiting on them forever. Data pods never do, to avoid following a second,
+  unsanctioned master.
+The master Service IP is never used: after a failover that Service still
+selects the original pod, which is now a replica.
+Pure bash on purpose: minimal images (the default Chainguard one) ship no grep,
+awk, head, sort, env, hostname or sleep.
+*/}}
+{{- define "valkey.sentinel.discoverMaster" -}}
+pause() { read -rt "$1" <> <(:) || true; }
+first_line() { local out; out=$("$@" 2>/dev/null) || true; printf '%s' "${out%%$'\n'*}"; }
+role_of() {
+  (
+    unset VALKEYCLI_AUTH REDISCLI_AUTH
+    [[ -n "${VALKEY_PASSWORD:-}" ]] && export VALKEYCLI_AUTH="$VALKEY_PASSWORD"
+    first_line valkey-cli -h "$1" -p {{ include "valkey.port" . | quote }} -t 2 --no-auth-warning ROLE
+  )
+}
+sentinel_master() {
+  (
+    unset VALKEYCLI_AUTH REDISCLI_AUTH
+    {{- if .Values.auth.sentinel }}
+    export VALKEYCLI_AUTH="${VALKEY_PASSWORD:-}"
+    {{- end }}
+    first_line valkey-cli -h {{ include "valkey.sentinel.serviceName" . | quote }} -p {{ .Values.sentinel.service.port | default 26379 | quote }} -t 2 --no-auth-warning \
+      SENTINEL get-master-addr-by-name {{ .Values.sentinel.masterSet | quote }}
+  )
+}
+discover_master() {
+  local ip addr _
+  ip=$(sentinel_master)
+  if [[ "$ip" =~ ^[0-9a-fA-F.:]+$ ]]; then
+    if [[ "$(role_of "$ip")" == "master" ]]; then
+      printf '%s\n' "$ip"
+      return 0
+    fi
+    [[ "${1:-}" == "--scan-if-stale" ]] || return 1
+  fi
+  [[ "${1:-}" == "--sentinels-only" ]] && return 2
+  local -A seen=()
+  while read -r addr _; do
+    [[ -z "$addr" || -n "${seen[$addr]:-}" ]] && continue
+    seen[$addr]=1
+    if [[ "$(role_of "$addr")" == "master" ]]; then
+      printf '%s\n' "$addr"
+      return 0
+    fi
+  done < <(getent ahosts {{ include "valkey.headless.serviceName" . | quote }})
+  return 1
+}
+{{- end }}

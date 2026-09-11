@@ -89,16 +89,61 @@ spec:
           args:
             - -c
             - |
+              {{- if eq .Values.architecture "sentinel" }}
+              {{- include "valkey.sentinel.discoverMaster" . | nindent 14 }}
+              conf=/tmp/valkey.conf
+              printf '%s\n' "$(< /etc/valkey/valkey.conf)" > "$conf"
+              {{- if .Values.auth.enabled }}
+              # masterauth too: Sentinel may demote this pod to replica after a failover
+              printf 'requirepass %s\nmasterauth %s\n' "$VALKEY_PASSWORD" "$VALKEY_PASSWORD" >> "$conf"
+              {{- end }}
+              # Wait at most twice down-after-milliseconds (plus margin) for a
+              # failover, so a cold start cannot block on a stale sentinel answer.
+              limit={{ add (mul (div (int .Values.sentinel.downAfterMilliseconds) 1000) 2) 10 }}
+              waited=0
+              while :; do
+                if [[ "$(sentinel_master)" == "$POD_IP" ]]; then
+                  break
+                fi
+                master_ip=$(discover_master --sentinels-only)
+                rc=$?
+                if (( rc == 0 )); then
+                  if [[ "$master_ip" != "$POD_IP" ]]; then
+                    echo "Sentinels report master at $master_ip: starting as its replica"
+                    printf 'replicaof %s %s\n' "$master_ip" {{ include "valkey.port" . | quote }} >> "$conf"
+                  fi
+                  break
+                fi
+                (( rc == 2 )) && break
+                if (( waited >= limit )); then
+                  echo "Reported master still unreachable after ${limit}s: starting as master"
+                  break
+                fi
+                echo "Sentinels report a master that is not reachable yet: waiting for failover"
+                pause 2
+                waited=$((waited + 2))
+              done
+              exec valkey-server "$conf"
+              {{- else }}
               {{- if .Values.auth.enabled }}
               export REDISCLI_AUTH="$VALKEY_PASSWORD"
-              # Copy config and add requirepass
-              cp /etc/valkey/valkey.conf /tmp/valkey.conf
+              # Copy config and add requirepass. Bash builtins only: the default
+              # image has no cp, so a failed cp used to start Valkey with nothing
+              # but requirepass and silently drop the chart configuration.
+              printf '%s\n' "$(< /etc/valkey/valkey.conf)" > /tmp/valkey.conf
               echo "requirepass $VALKEY_PASSWORD" >> /tmp/valkey.conf
               exec valkey-server /tmp/valkey.conf
               {{- else }}
               exec valkey-server /etc/valkey/valkey.conf
               {{- end }}
+              {{- end }}
           env:
+            {{- if eq .Values.architecture "sentinel" }}
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            {{- end }}
             {{- if .Values.auth.enabled }}
             - name: VALKEY_PASSWORD
               valueFrom:
@@ -110,6 +155,19 @@ spec:
             - name: valkey
               containerPort: 6379
               protocol: TCP
+          {{- if and (eq .Values.architecture "sentinel") .Values.master.startupProbe.enabled }}
+          startupProbe:
+            initialDelaySeconds: {{ .Values.master.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.master.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.master.startupProbe.timeoutSeconds }}
+            successThreshold: 1
+            failureThreshold: {{ .Values.master.startupProbe.failureThreshold }}
+            exec:
+              command:
+                - /usr/bin/bash
+                - -c
+                - /health/ping_liveness_local.sh 5
+          {{- end }}
           livenessProbe:
             initialDelaySeconds: 30
             periodSeconds: 10

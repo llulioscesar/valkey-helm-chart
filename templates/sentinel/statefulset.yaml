@@ -77,25 +77,36 @@ spec:
           args:
             - -c
             - |
-              # Wait for master service to be resolvable
-              until getent hosts {{ include "valkey.master.serviceName" . }}; do
-                echo "Waiting for master DNS to be resolvable..."
-                sleep 1
-              done
-              # Get master IP (getent returns "IP hostname", we need only IP)
-              MASTER_LINE=$(getent hosts {{ include "valkey.master.serviceName" . }})
-              MASTER_IP=${MASTER_LINE%% *}
-              echo "Master resolved to: $MASTER_IP"
-              # Copy config to /tmp and add sentinel monitor with resolved IP
-              cp /etc/valkey/sentinel.conf /tmp/sentinel.conf
-              echo "sentinel monitor {{ .Values.sentinel.masterSet }} $MASTER_IP {{ include "valkey.port" . }} {{ .Values.sentinel.quorum }}" >> /tmp/sentinel.conf
-              echo "sentinel down-after-milliseconds {{ .Values.sentinel.masterSet }} {{ .Values.sentinel.downAfterMilliseconds }}" >> /tmp/sentinel.conf
-              echo "sentinel failover-timeout {{ .Values.sentinel.masterSet }} {{ .Values.sentinel.failoverTimeout }}" >> /tmp/sentinel.conf
-              echo "sentinel parallel-syncs {{ .Values.sentinel.masterSet }} {{ .Values.sentinel.parallelSyncs }}" >> /tmp/sentinel.conf
-              {{- if (include "valkey.auth.enabled" .) }}
-              echo "sentinel auth-pass {{ .Values.sentinel.masterSet }} $VALKEY_PASSWORD" >> /tmp/sentinel.conf
-              {{- end }}
-              exec valkey-sentinel /tmp/sentinel.conf
+              {{- include "valkey.sentinel.discoverMaster" . | nindent 14 }}
+              conf=/tmp/sentinel.conf
+              # /tmp survives container restarts: reuse the file Sentinel has been
+              # rewriting, so the topology it learned (e.g. a promoted master) is kept.
+              monitored=""
+              if [[ -f "$conf" ]]; then
+                while read -r line; do
+                  [[ "$line" == "sentinel monitor {{ .Values.sentinel.masterSet }} "* ]] && monitored=1
+                done < "$conf"
+              fi
+              if [[ -n "$monitored" ]]; then
+                echo "Reusing $conf"
+              else
+                until master_ip=$(discover_master --scan-if-stale); do
+                  echo "Waiting for a reachable master..."
+                  pause 2
+                done
+                echo "Monitoring master at $master_ip"
+                {
+                  printf '%s\n\n' "$(< /etc/valkey/sentinel.conf)"
+                  echo "sentinel monitor {{ .Values.sentinel.masterSet }} $master_ip {{ include "valkey.port" . }} {{ .Values.sentinel.quorum }}"
+                  echo "sentinel down-after-milliseconds {{ .Values.sentinel.masterSet }} {{ .Values.sentinel.downAfterMilliseconds }}"
+                  echo "sentinel failover-timeout {{ .Values.sentinel.masterSet }} {{ .Values.sentinel.failoverTimeout }}"
+                  echo "sentinel parallel-syncs {{ .Values.sentinel.masterSet }} {{ .Values.sentinel.parallelSyncs }}"
+                  {{- if (include "valkey.auth.enabled" .) }}
+                  echo "sentinel auth-pass {{ .Values.sentinel.masterSet }} $VALKEY_PASSWORD"
+                  {{- end }}
+                } > "$conf"
+              fi
+              exec valkey-sentinel "$conf"
           env:
             - name: VALKEY_SENTINEL_ENABLED
               value: "yes"
@@ -170,6 +181,19 @@ spec:
               protocol: TCP
             {{- end }}
           {{- if not .Values.diagnosticMode.enabled }}
+          {{- if .Values.sentinel.startupProbe.enabled }}
+          startupProbe:
+            initialDelaySeconds: {{ .Values.sentinel.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.sentinel.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.sentinel.startupProbe.timeoutSeconds }}
+            successThreshold: 1
+            failureThreshold: {{ .Values.sentinel.startupProbe.failureThreshold }}
+            exec:
+              command:
+                - /usr/bin/bash
+                - -c
+                - /health/ping_sentinel.sh 5
+          {{- end }}
           livenessProbe:
             initialDelaySeconds: {{ .Values.sentinel.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.sentinel.livenessProbe.periodSeconds }}
