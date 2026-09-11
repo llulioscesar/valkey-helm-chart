@@ -85,51 +85,67 @@ jobs:
       - name: Package Chart
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          REPO_URL: https://start-codex.github.io/valkey-helm-chart
+          # Versions removed from the published repository. 0.1.8-0.1.12 were packaged with
+          # .git/, public/ and .cr-release-packages/ inside (0.1.12 nests 0.1.11 and is 21 MB,
+          # which Artifact Hub rejects).
+          EXCLUDED_VERSIONS: '^0\.1\.(8|9|10|11|12)$'
         run: |
           mkdir -p .packages public
+          VERSION=$(yq '.version' Chart.yaml)
+          ALREADY_PUBLISHED=""
 
-          # Download existing charts
-          wget -q https://start-codex.github.io/valkey-helm-chart/index.yaml -O existing-index.yaml 2>/dev/null || true
-
-          if [ -f existing-index.yaml ]; then
-            grep -o 'https://start-codex.github.io/valkey-helm-chart/[^"]*\.tgz' existing-index.yaml | while read url; do
-              [ -n "$url" ] && wget -q "$url" -O "public/$(basename $url)" || true
+          # Download the existing repository, minus the excluded versions
+          if wget -q "$REPO_URL/index.yaml" -O existing-index.yaml; then
+            yq -i '.entries[] |= map(select(.version | test(strenv(EXCLUDED_VERSIONS)) | not))' existing-index.yaml
+            for url in $(yq '.entries[][].urls[]' existing-index.yaml); do
+              name=$(basename "$url")
+              wget -q "$url" -O "public/$name" || { echo "::error::Failed to download $url"; exit 1; }
+              # Keep existing signatures; older versions may have none
+              wget -q "$url.prov" -O "public/$name.prov" || rm -f "public/$name.prov"
             done
-            cp existing-index.yaml .packages/
+            ALREADY_PUBLISHED=$(yq ".entries.valkey[] | select(.version == \"$VERSION\") | .version" existing-index.yaml)
           fi
 
-          # Package with signature if GPG available
-          if [ "$GPG_AVAILABLE" = "true" ] && [ -n "$GPG_PASSPHRASE" ]; then
-            echo "📦 Packaging with GPG signature..."
-            echo "$GPG_PASSPHRASE" | helm package . -d .packages \
-              --sign \
-              --key "cloud@startcodex.com" \
-              --keyring ~/.gnupg/secring.gpg \
-              --passphrase-file /dev/stdin
+          if [ -n "$ALREADY_PUBLISHED" ]; then
+            # Published versions are immutable: reuse the package instead of repackaging,
+            # so a manual run does not change its digest
+            echo "::warning::Chart version $VERSION is already published; reusing the existing package"
+            cp existing-index.yaml public/index.yaml
+          else
+            # Package with signature if GPG available
+            if [ "$GPG_AVAILABLE" = "true" ] && [ -n "$GPG_PASSPHRASE" ]; then
+              echo "📦 Packaging with GPG signature..."
+              echo "$GPG_PASSPHRASE" | helm package . -d .packages \
+                --sign \
+                --key "cloud@startcodex.com" \
+                --keyring ~/.gnupg/secring.gpg \
+                --passphrase-file /dev/stdin
 
-            if [ -f .packages/*.prov ]; then
-              echo "✅ Chart signed successfully"
-              ls -la .packages/*.prov
+              if [ -f .packages/*.prov ]; then
+                echo "✅ Chart signed successfully"
+                ls -la .packages/*.prov
+              else
+                echo "⚠️ Signature failed, packaging without signature"
+                helm package . -d .packages
+              fi
             else
-              echo "⚠️ Signature failed, packaging without signature"
+              echo "📦 Packaging without signature..."
               helm package . -d .packages
             fi
-          else
-            echo "📦 Packaging without signature..."
-            helm package . -d .packages
+
+            # Generate index
+            if [ -f existing-index.yaml ]; then
+              helm repo index .packages --url "$REPO_URL" --merge existing-index.yaml
+            else
+              helm repo index .packages --url "$REPO_URL"
+            fi
+
+            cp .packages/*.tgz public/
+            cp .packages/*.prov public/ 2>/dev/null || true
+            cp .packages/index.yaml public/
           fi
 
-          # Generate index
-          if [ -f .packages/existing-index.yaml ]; then
-            helm repo index .packages --url https://start-codex.github.io/valkey-helm-chart --merge .packages/existing-index.yaml
-          else
-            helm repo index .packages --url https://start-codex.github.io/valkey-helm-chart
-          fi
-
-          # Copy files to public
-          cp .packages/*.tgz public/
-          cp .packages/*.prov public/ 2>/dev/null || true
-          cp .packages/index.yaml public/
           cp README.md artifacthub-repo.yml public-key.asc public/
 
       - name: Generate index.html
