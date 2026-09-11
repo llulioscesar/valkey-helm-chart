@@ -178,7 +178,7 @@ spec:
               command:
                 - /usr/bin/bash
                 - -c
-                - /health/ping_liveness_local.sh 5
+                - {{ if eq .Values.architecture "sentinel" }}/health/ping_liveness_replica.sh{{ else }}/health/ping_liveness_local.sh 5{{ end }}
           readinessProbe:
             initialDelaySeconds: 30
             periodSeconds: 10

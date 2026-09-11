@@ -1,6 +1,13 @@
 # Changelog
 
 
+## [0.2.10] - 2026-09-11
+
+### Fixed
+- Sentinel mode did not recover after a node or cluster restart. Containers restart with a new pod IP while `/tmp` survives, so every sentinel reused `/tmp/sentinel.conf` pointing at the old master and at the old IPs of its peers: the master stayed `s_down`, no quorum could form, no failover happened, and replicas waited forever for a reachable master. A sentinel now reuses its saved config only while the monitored master still answers `ROLE` master; otherwise it discards it and discovers the current master as on a fresh install. After a full restart the master pod becomes master again even if a replica was master before, so writes made after the last failover are lost.
+- Sentinel mode: a replica could stay attached to a master that no longer exists. During an upgrade the pre-upgrade hook recreates every StatefulSet, so the master, a replica and a sentinel restart at the same time; a promoted replica can be replaced seconds later and a pod that had just started as its replica keeps replicating the dead address. New sentinels start with a clean config and only learn replicas from the current master, so nobody reconfigures it. Replicas, and the master pod in sentinel mode, now use a liveness check that fails only when the replication link is down and the sentinels report a different master that answers as master; the pod restarts and discovers the current master.
+
+
 ## [0.2.9] - 2026-09-11
 
 ### Changed

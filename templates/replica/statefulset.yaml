@@ -214,7 +214,7 @@ spec:
               command:
                 - /usr/bin/bash
                 - -c
-                - /health/ping_liveness_local.sh 5
+                - /health/ping_liveness_replica.sh
           readinessProbe:
             initialDelaySeconds: {{ .Values.replica.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.replica.readinessProbe.periodSeconds }}

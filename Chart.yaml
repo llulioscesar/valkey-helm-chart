@@ -2,7 +2,7 @@ apiVersion: v2
 name: valkey
 description: Valkey is an open source, high-performance data structure server compatible with Redis. It supports strings, hashes, lists, sets, and sorted sets.
 type: application
-version: 0.2.9
+version: 0.2.10
 appVersion: "9.1.2"
 annotations:
   artifacthub.io/signKey: |
@@ -28,21 +28,9 @@ annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
     - kind: fixed
-      description: Sentinel mode now replicates with auth (requirepass and masterauth on master and replicas)
+      description: Sentinel mode recovers after a node or cluster restart; a sentinel only reuses its saved config while the monitored master still answers as master
     - kind: fixed
-      description: sentinel.conf rendered for architecture sentinel instead of sentinel.enabled
-    - kind: fixed
-      description: Sentinel and data pods discover the current master instead of the master Service IP, so clients follow failovers
-    - kind: fixed
-      description: Restarted sentinels reuse their config instead of looping on Duplicate master name
-    - kind: fixed
-      description: replica.affinity no longer breaks rendering
-    - kind: fixed
-      description: Standalone with auth no longer starts with a config missing everything but requirepass (cp is absent from the Chainguard image)
-    - kind: added
-      description: startupProbe for master, replica and sentinel in sentinel mode
-    - kind: changed
-      description: Sentinel defaults parallelSyncs 10 and failoverTimeout 30000 so stale replica entries cannot stall a failover
+      description: A replica left following a master that no longer exists is restarted and rediscovers the current master
 keywords:
   - valkey
   - redis
