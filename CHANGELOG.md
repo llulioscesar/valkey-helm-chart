@@ -1,6 +1,21 @@
 # Changelog
 
 
+## [0.2.8] - 2026-09-11
+
+### Fixed
+- Sentinel mode: replicas could not replicate with auth enabled. Master and replicas now set both `requirepass` and `masterauth`, so a former master can rejoin as a replica after a failover.
+- Sentinel mode: `sentinel.conf` was rendered only when `sentinel.enabled` was true, independently of `architecture: sentinel`; every sentinel restart appended another `monitor` line and looped on `Duplicate master name`. The file is now rendered for `architecture: sentinel`, and a restarted sentinel reuses `/tmp/sentinel.conf` when it already monitors the master.
+- Sentinel mode: `sentinel monitor` pointed at the master Service IP, which always selects the original master pod, so clients kept going to a demoted node after a failover. Every pod now asks the sentinels for the current master, accepts the answer only if that address replies `ROLE` master, and on a fresh install finds the master through the headless Service.
+- Sentinel mode: a restarted master pod could stay a replica of its own dead IP forever, and a starting sentinel could wait indefinitely on a dead master. Both cases are now handled by the reachability check and a headless scan.
+- Sentinel mode: startup scripts waiting for a master were killed by the liveness and readiness probes before their wait ended, deadlocking the whole StatefulSet. Added `startupProbe` to master, replica and sentinel (5 minutes by default).
+- `replica.affinity` referenced a helper that does not exist and broke rendering; it now uses `toYaml` like master and sentinel.
+- Standalone with auth: the startup script used `cp`, which the Chainguard image does not ship, so Valkey started with a config containing only `requirepass` (`maxmemory-policy noeviction` instead of `allkeys-lru`). Replaced with a bash builtin.
+
+### Changed
+- Sentinel defaults: `parallelSyncs` 1 → 10 and `failoverTimeout` 180000 → 30000. Every pod restart leaves an `s_down` replica entry with the old IP in the sentinels. With `parallel-syncs 1` the failover leader can spend its only reconfiguration slot on one of those addresses, and the per-replica timeout is only evaluated while a slot is free, so the failover lasts the whole `failover-timeout`; meanwhile the leader still reports the old master in `SENTINEL MASTERS`. Measured: ~3.5 minutes without a master for clients querying the leader, ~31 seconds with the new defaults.
+
+
 ## [0.2.7] - 2026-03-09
 
 ### Changed

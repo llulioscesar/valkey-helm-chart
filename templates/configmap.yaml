@@ -19,7 +19,7 @@ data:
     {{- .Values.master.configuration | nindent 4 }}
   replica.conf: |
     {{- .Values.replica.configuration | nindent 4 }}
-  {{- if .Values.sentinel.enabled }}
+  {{- if eq .Values.architecture "sentinel" }}
   sentinel.conf: |
     {{- .Values.sentinel.configuration | nindent 4 }}
   {{- end }}

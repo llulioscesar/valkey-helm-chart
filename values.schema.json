@@ -372,12 +372,12 @@
         "failoverTimeout": {
           "type": "integer",
           "description": "Failover timeout in ms",
-          "default": 180000
+          "default": 30000
         },
         "parallelSyncs": {
           "type": "integer",
           "description": "Number of replicas to sync in parallel",
-          "default": 1
+          "default": 10
         },
         "image": {
           "type": "object",
