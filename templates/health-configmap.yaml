@@ -29,6 +29,41 @@ data:
     echo "$response"
     exit 1
 {{- if eq .Values.architecture "sentinel" }}
+  ping_liveness_replica.sh: |-
+    #!/usr/bin/bash
+    # Local liveness first, as for any pod.
+    "${0%/*}/ping_liveness_local.sh" || exit 1
+    # A replica whose master disappeared after the sentinels lost track of it (for
+    # example, sentinels recreated with a clean config during an upgrade) keeps
+    # replicating a dead address forever: the sentinels only learn replicas from the
+    # current master, so nobody reconfigures it. Fail only when the link is down and
+    # the sentinels report a different master that answers as master; the pod then
+    # restarts and discovers the current master on startup.
+    port={{ include "valkey.port" . }}
+    role="" host="" link=""
+    while IFS=: read -r key value; do
+      value=${value%$'\r'}
+      case "$key" in
+        role) role=$value ;;
+        master_host) host=$value ;;
+        master_link_status) link=$value ;;
+      esac
+    done < <(REDISCLI_AUTH="${VALKEY_PASSWORD:-}" valkey-cli -h localhost -p "$port" --no-auth-warning INFO replication 2>/dev/null)
+    [[ "$role" == "slave" && "$link" == "down" ]] || exit 0
+    reported=$(
+      unset VALKEYCLI_AUTH REDISCLI_AUTH
+      {{- if .Values.auth.sentinel }}
+      export VALKEYCLI_AUTH="${VALKEY_PASSWORD:-}"
+      {{- end }}
+      valkey-cli -h {{ include "valkey.sentinel.serviceName" . | quote }} -p {{ .Values.sentinel.service.port | default 26379 | quote }} -t 1 --no-auth-warning \
+        SENTINEL get-master-addr-by-name {{ .Values.sentinel.masterSet | quote }} 2>/dev/null
+    )
+    reported=${reported%%$'\n'*}
+    [[ -n "$reported" && "$reported" != "$host" ]] || exit 0
+    answer=$(REDISCLI_AUTH="${VALKEY_PASSWORD:-}" valkey-cli -h "$reported" -p "$port" -t 1 --no-auth-warning ROLE 2>/dev/null)
+    [[ "${answer%%$'\n'*}" == "master" ]] || exit 0
+    echo "Replicating unreachable master $host while the sentinels report master $reported"
+    exit 1
   ping_sentinel.sh: |-
     #!/usr/bin/bash
 {{- if .Values.auth.sentinel }}
