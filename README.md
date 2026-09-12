@@ -26,7 +26,10 @@ Helm chart for deploying [Valkey](https://valkey.io/) on Kubernetes. Valkey is a
 - [Monitoring](#monitoring)
 - [Security](#security)
 - [Troubleshooting](#troubleshooting)
+- [Uninstallation](#uninstallation)
+- [Development](#development)
 - [Contributing](#contributing)
+- [Links](#links)
 - [License](#license)
 
 ## Features
@@ -39,7 +42,7 @@ Helm chart for deploying [Valkey](https://valkey.io/) on Kubernetes. Valkey is a
 | **Persistence** | Configurable persistent volumes |
 | **Metrics** | Built-in Prometheus exporter |
 | **Security** | SecurityContext, NetworkPolicies, RBAC |
-| **In-place Upgrades** | No immutable StatefulSet fields change between releases, so upgrades are plain rolling updates |
+| **Quiet Upgrades** | A chart version bump changes no immutable StatefulSet field and no pod template, so it neither fails nor restarts pods |
 | **TLS** | Support for encrypted connections |
 
 ## Requirements
@@ -72,8 +75,9 @@ If you require **version pinning** for production:
 ```yaml
 # Override with a specific version (requires Chainguard Pro or alternative registry)
 image:
+  registry: docker.io        # The default is cgr.dev, so override it too
   repository: valkey/valkey  # Official Valkey images
-  tag: "9.0.0"               # Specific version tag
+  tag: "9.1.2"               # Specific version tag
 ```
 
 > **Note**: Using `latest` provides continuous security updates but means deployments may pull different versions over time. For strict reproducibility, consider using image digests or switching to a registry that provides versioned tags.
@@ -159,9 +163,9 @@ helm install my-valkey valkey/valkey \
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `image.registry` | Image registry | `docker.io` |
-| `image.repository` | Image repository | `valkey/valkey` |
-| `image.tag` | Image tag | `9.0.0` |
+| `image.registry` | Image registry | `cgr.dev` |
+| `image.repository` | Image repository | `chainguard/valkey` |
+| `image.tag` | Image tag (see [Image Versioning Strategy](#image-versioning-strategy)) | `latest` |
 | `image.pullPolicy` | Pull policy | `IfNotPresent` |
 
 ### Authentication
@@ -194,7 +198,8 @@ helm install my-valkey valkey/valkey \
 | `sentinel.replicaCount` | Number of sentinels | `3` |
 | `sentinel.quorum` | Quorum for failover | `2` |
 | `sentinel.downAfterMilliseconds` | Time to detect failure | `30000` |
-| `sentinel.failoverTimeout` | Failover timeout | `180000` |
+| `sentinel.failoverTimeout` | Failover timeout | `30000` |
+| `sentinel.masterSet` | Monitored master set name | `mymaster` |
 | `master.replicaCount` | Number of masters | `1` |
 | `replica.replicaCount` | Number of replicas | `2` |
 
@@ -204,7 +209,7 @@ helm install my-valkey valkey/valkey \
 |-----------|-------------|---------|
 | `metrics.enabled` | Enable Prometheus exporter | `false` |
 | `metrics.image.repository` | Exporter image | `oliver006/redis_exporter` |
-| `metrics.image.tag` | Exporter tag | `v1.81.0` |
+| `metrics.image.tag` | Exporter tag | `v1.91.1` |
 | `metrics.serviceMonitor.enabled` | Create ServiceMonitor | `false` |
 | `metrics.podMonitor.enabled` | Create PodMonitor | `false` |
 
@@ -212,8 +217,9 @@ helm install my-valkey valkey/valkey \
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `podSecurityContext.fsGroup` | Filesystem group | `999` |
-| `podSecurityContext.runAsUser` | Container user | `999` |
+| `podSecurityContext.fsGroup` | Filesystem group | `65532` |
+| `podSecurityContext.runAsUser` | Container user | `65532` |
+| `podSecurityContext.runAsGroup` | Container group | `65532` |
 | `securityContext.runAsNonRoot` | Run as non-root | `true` |
 | `securityContext.readOnlyRootFilesystem` | Read-only filesystem | `true` |
 | `networkPolicy.enabled` | Enable NetworkPolicy | `false` |
@@ -350,12 +356,12 @@ networkPolicy:
 ```bash
 # Temporary pod for testing
 kubectl run valkey-client --rm -it \
-  --image=valkey/valkey:9.0.0 \
+  --image=valkey/valkey:9.1.2 \
   -- valkey-cli -h my-valkey
 
 # With authentication
 kubectl run valkey-client --rm -it \
-  --image=valkey/valkey:9.0.0 \
+  --image=valkey/valkey:9.1.2 \
   -- valkey-cli -h my-valkey -a "your-password"
 ```
 
@@ -372,7 +378,7 @@ valkey-cli -h localhost -p 6379
 
 ```bash
 kubectl run valkey-client --rm -it \
-  --image=valkey/valkey:9.0.0 \
+  --image=valkey/valkey:9.1.2 \
   -- valkey-cli -h my-valkey-sentinel -p 26379
 
 # Useful sentinel commands
@@ -383,10 +389,16 @@ kubectl run valkey-client --rm -it \
 
 ## Upgrades
 
-An upgrade is a plain Helm rolling update. No StatefulSet field that Kubernetes
-refuses to update in place (`serviceName`, selector, `volumeClaimTemplates`,
-`podManagementPolicy`) changes between releases, so nothing has to be deleted
-and recreated.
+An upgrade is a plain Helm rolling update, and from 0.3.2 on a version bump alone
+**does not restart any pod**.
+
+Two things make that true. No StatefulSet field that Kubernetes refuses to update
+in place (`serviceName`, selector, `volumeClaimTemplates`, `podManagementPolicy`)
+changes between releases, so nothing has to be deleted and recreated. And no pod
+template changes either: the pod templates and both ConfigMaps use only the stable
+selector labels, so the `checksum/configmap` and `checksum/health` annotations stay
+put unless the configuration itself changes. Pods restart when the image or the
+configuration changes, and not otherwise.
 
 > **Upgrading from 0.2.10 or earlier: one manual step**
 >
@@ -403,6 +415,13 @@ and recreated.
 > needed recreating, and restarting the sentinels together with the data pods is
 > how an upgrade ends up with no master at all. Delete the master and replica
 > StatefulSets one at a time, waiting for each to come back.
+
+> **Upgrading from 0.3.0: one last restart**
+>
+> 0.3.1 removes the chart version from the pod templates and the ConfigMaps, so
+> the checksum annotations settle for the last time and every pod restarts once.
+> It is a plain rolling update — no immutable field changes, nothing to delete.
+> From 0.3.2 on, a version bump restarts nothing.
 
 ### The pre-upgrade hook
 
@@ -427,8 +446,11 @@ helm upgrade my-valkey valkey/valkey
 # Upgrade with new values
 helm upgrade my-valkey valkey/valkey -f new-values.yaml
 
-# Upgrade Valkey image
-helm upgrade my-valkey valkey/valkey --set image.tag=9.0.0
+# Pin the Valkey image to a specific version
+helm upgrade my-valkey valkey/valkey \
+  --set image.registry=docker.io \
+  --set image.repository=valkey/valkey \
+  --set image.tag=9.1.2
 ```
 
 ### Hook Configuration
@@ -515,9 +537,9 @@ You can use the official Redis Exporter dashboard: [Grafana Dashboard 763](https
 
 ```yaml
 podSecurityContext:
-  fsGroup: 999
-  runAsUser: 999
-  runAsGroup: 999
+  fsGroup: 65532
+  runAsUser: 65532
+  runAsGroup: 65532
 
 securityContext:
   allowPrivilegeEscalation: false
@@ -526,6 +548,7 @@ securityContext:
       - ALL
   readOnlyRootFilesystem: true
   runAsNonRoot: true
+  runAsUser: 65532
 ```
 
 ## Troubleshooting
@@ -578,6 +601,41 @@ with no master.
 kubectl exec -it my-valkey-sentinel-0 -- valkey-cli -p 26379 SENTINEL masters
 ```
 
+### Sentinel Mode Left With No Master
+
+Symptom: every data pod reports `slave` of an address that no longer exists, the
+sentinels report that same dead address, and starting pods sit in
+`Waiting for a reachable master...`. It happens when the master, the replicas and
+the sentinels all restart close together: the sentinels promote a replica that is
+itself about to restart, and afterwards nobody answers at the promoted address.
+
+From 0.3.2 this resolves itself. Each pod's startup loop waits at most
+`2 × sentinel.downAfterMilliseconds + 10s` of wall clock for a reachable master
+and then starts as master, giving the sentinels a live candidate. From 0.3.1 a
+version bump no longer restarts every pod at once, so the situation is far less
+likely to arise in the first place.
+
+To resolve it by hand, **the order matters**. Live sentinels actively reconfigure
+instances, so they will revert a manual promotion within seconds while they still
+monitor the dead address. Restart the sentinels first, then promote:
+
+```bash
+# 1. Restart the sentinels so they discard the stale master address
+kubectl delete pod -l app.kubernetes.io/component=sentinel
+
+# 2. While they are down, promote the pod with the most authoritative data
+#    (normally the master pod, which came back with its own volume)
+kubectl exec my-valkey-master-0 -- valkey-cli -a "$PASSWORD" REPLICAOF NO ONE
+
+# 3. The sentinels rediscover it on startup; replicas leave their wait loop
+#    on their own once a master answers
+```
+
+Once a live master answers, clear the ghost replica the failover left behind —
+`num-slaves` counts one more than exists — with `SENTINEL RESET` on each sentinel.
+Do this **only** after the master is reachable: a reset re-resolves from the
+configured address, which is useless while that address is dead.
+
 ## Uninstallation
 
 ```bash
@@ -624,7 +682,7 @@ helm test my-valkey
 
 - [Valkey Official](https://valkey.io/)
 - [Valkey GitHub](https://github.com/valkey-io/valkey)
-- [Artifact Hub](https://artifacthub.io/packages/helm/valkey/valkey)
+- [Artifact Hub](https://artifacthub.io/packages/helm/valkey-redis/valkey)
 - [Chart Repository](https://github.com/start-codex/valkey-helm-chart)
 
 ## License
