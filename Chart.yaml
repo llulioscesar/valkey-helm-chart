@@ -2,7 +2,7 @@ apiVersion: v2
 name: valkey
 description: Valkey is an open source, high-performance data structure server compatible with Redis. It supports strings, hashes, lists, sets, and sorted sets.
 type: application
-version: 0.2.10
+version: 0.3.0
 appVersion: "9.1.2"
 annotations:
   artifacthub.io/signKey: |
@@ -28,9 +28,9 @@ annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
     - kind: fixed
-      description: Sentinel mode recovers after a node or cluster restart; a sentinel only reuses its saved config while the monitored master still answers as master
-    - kind: fixed
-      description: A replica left following a master that no longer exists is restarted and rediscovers the current master
+      description: volumeClaimTemplates now use the stable selector labels, so a version bump no longer changes an immutable StatefulSet field and upgrades no longer need the pre-upgrade hook
+    - kind: changed
+      description: The pre-upgrade hook that deletes and recreates the StatefulSets is now disabled by default (preUpgradeHook.enabled)
 keywords:
   - valkey
   - redis

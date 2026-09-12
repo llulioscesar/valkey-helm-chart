@@ -39,7 +39,7 @@ Helm chart for deploying [Valkey](https://valkey.io/) on Kubernetes. Valkey is a
 | **Persistence** | Configurable persistent volumes |
 | **Metrics** | Built-in Prometheus exporter |
 | **Security** | SecurityContext, NetworkPolicies, RBAC |
-| **Automatic Upgrades** | Pre-upgrade hooks for zero-downtime migrations |
+| **In-place Upgrades** | No immutable StatefulSet fields change between releases, so upgrades are plain rolling updates |
 | **TLS** | Support for encrypted connections |
 
 ## Requirements
@@ -383,13 +383,34 @@ kubectl run valkey-client --rm -it \
 
 ## Upgrades
 
-This chart includes an automatic upgrade mechanism that handles StatefulSets transparently, avoiding immutable field errors.
+An upgrade is a plain Helm rolling update. No StatefulSet field that Kubernetes
+refuses to update in place (`serviceName`, selector, `volumeClaimTemplates`,
+`podManagementPolicy`) changes between releases, so nothing has to be deleted
+and recreated.
 
-### How It Works
+> **Upgrading from 0.2.10 or earlier: one manual step**
+>
+> Up to 0.2.10 the `volumeClaimTemplates` carried the `helm.sh/chart` and
+> `app.kubernetes.io/version` labels. Those change with every release, and
+> `volumeClaimTemplates` is immutable, so every upgrade failed with
+> `Forbidden: updates to statefulset spec` unless the StatefulSets were deleted
+> first. From 0.3.0 they use the stable selector labels instead.
+>
+> Moving onto 0.3.0 is therefore the last upgrade that changes an immutable
+> field. Run it once with `--set preUpgradeHook.enabled=true`, or delete the
+> StatefulSets yourself with `--cascade=orphan`. **In sentinel mode, do not
+> delete the sentinel StatefulSet**: it has no `volumeClaimTemplates`, it never
+> needed recreating, and restarting the sentinels together with the data pods is
+> how an upgrade ends up with no master at all. Delete the master and replica
+> StatefulSets one at a time, waiting for each to come back.
 
-1. **Pre-upgrade Hook**: Deletes StatefulSets with `--cascade=orphan`, preserving pods and PVCs
-2. **Recreation**: Helm recreates StatefulSets with new configuration
-3. **Rolling Update**: Pods are updated gradually
+### The pre-upgrade hook
+
+Disabled by default (`preUpgradeHook.enabled`). It deletes the StatefulSets with
+`--cascade=orphan` — pods and PVCs survive — so Helm can recreate them. Enable it
+only for a release whose notes say an immutable field changed. While enabled, the
+upgrade also depends on pulling the hook image, and stays in `pending-upgrade` if
+that pull fails.
 
 ### Upgrading the Chart
 
@@ -414,10 +435,11 @@ helm upgrade my-valkey valkey/valkey --set image.tag=9.0.0
 
 ```yaml
 preUpgradeHook:
+  enabled: false
   image:
-    registry: docker.io
-    repository: alpine/k8s
-    tag: "1.31.13"
+    registry: cgr.dev
+    repository: chainguard/kubectl
+    tag: "latest"
   resources:
     limits:
       memory: 128Mi
@@ -536,12 +558,19 @@ kubectl run test --rm -it --image=busybox -- nc -zv my-valkey 6379
 
 ### StatefulSet Upgrade Error
 
-If the pre-upgrade hook fails, you can delete manually:
+`Forbidden: updates to statefulset spec` means the release changes a field
+Kubernetes cannot update in place. Delete the StatefulSet yourself — pods and
+PVCs survive `--cascade=orphan` — and upgrade again:
 
 ```bash
 kubectl delete statefulset my-valkey --cascade=orphan
 helm upgrade my-valkey valkey/valkey
 ```
+
+In sentinel mode delete `-master` and `-replica` **one at a time**, waiting for
+each to come back, and leave `-sentinel` alone: it has no volumes to preserve,
+and restarting the sentinels alongside the data pods can leave the deployment
+with no master.
 
 ### Check Sentinel Status
 
