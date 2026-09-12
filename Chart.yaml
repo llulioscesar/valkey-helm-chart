@@ -2,7 +2,7 @@ apiVersion: v2
 name: valkey
 description: Valkey is an open source, high-performance data structure server compatible with Redis. It supports strings, hashes, lists, sets, and sorted sets.
 type: application
-version: 0.3.1
+version: 0.3.2
 appVersion: "9.1.2"
 annotations:
   artifacthub.io/signKey: |
@@ -28,9 +28,7 @@ annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
     - kind: fixed
-      description: A chart version bump no longer restarts any pod. The replica and sentinel pod templates and both ConfigMaps now use the stable selector labels, so the checksum annotations stop changing when only the version changes
-    - kind: fixed
-      description: A replica no longer waits forever when the sentinels report a master nobody can reach. It gives up after 2 x sentinel.downAfterMilliseconds + 10s and starts as master, the same bounded wait the master pod already had
+      description: The bounded wait for a reachable master now measures wall clock instead of counting pauses, in both the master and the replica startup loops. The counter reached 30 while the clock was at 97 seconds, so a 70-second limit would not have fired for about four minutes
 keywords:
   - valkey
   - redis

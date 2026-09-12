@@ -99,8 +99,9 @@ spec:
               {{- end }}
               # Wait at most twice down-after-milliseconds (plus margin) for a
               # failover, so a cold start cannot block on a stale sentinel answer.
+              # SECONDS is wall clock: see the note in replica/statefulset.yaml.
               limit={{ add (mul (div (int .Values.sentinel.downAfterMilliseconds) 1000) 2) 10 }}
-              waited=0
+              SECONDS=0
               while :; do
                 if [[ "$(sentinel_master)" == "$POD_IP" ]]; then
                   break
@@ -115,13 +116,12 @@ spec:
                   break
                 fi
                 (( rc == 2 )) && break
-                if (( waited >= limit )); then
-                  echo "Reported master still unreachable after ${limit}s: starting as master"
+                if (( SECONDS >= limit )); then
+                  echo "Reported master still unreachable after ${SECONDS}s: starting as master"
                   break
                 fi
                 echo "Sentinels report a master that is not reachable yet: waiting for failover"
                 pause 2
-                waited=$((waited + 2))
               done
               exec valkey-server "$conf"
               {{- else }}
