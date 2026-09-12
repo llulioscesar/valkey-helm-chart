@@ -422,12 +422,17 @@ configuration changes, and not otherwise.
 > how an upgrade ends up with no master at all. Delete the master and replica
 > StatefulSets one at a time, waiting for each to come back.
 
-> **Upgrading from 0.3.0: one last restart**
+> **Upgrading from 0.3.0 or 0.3.1: one more restart**
 >
 > 0.3.1 removes the chart version from the pod templates and the ConfigMaps, so
-> the checksum annotations settle for the last time and every pod restarts once.
-> It is a plain rolling update — no immutable field changes, nothing to delete.
-> From 0.3.2 on, a version bump restarts nothing.
+> the checksum annotations settle and every pod restarts once. 0.3.2 edits the
+> startup script, which lives in the pod template, so it restarts pods as well —
+> that is a real change to what the pods run, not a bare version bump. Both are
+> plain rolling updates: no immutable field changes, nothing to delete.
+>
+> From 0.3.2 on, a release that only bumps the version restarts nothing. A release
+> that changes the scripts or the configuration still restarts pods, as it should:
+> that is what the checksum annotations are for.
 
 ### The pre-upgrade hook
 
