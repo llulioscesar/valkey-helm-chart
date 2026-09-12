@@ -117,21 +117,24 @@ spec:
               # an address that no longer exists -- waiting forever deadlocks the
               # whole deployment. Starting as master instead gives the sentinels a
               # live candidate to converge on.
+              # SECONDS is wall clock. Counting the pauses instead undercounts by
+              # several times: every iteration also runs discover_master and
+              # sentinel_master, each with its own connect timeouts and a scan of
+              # the headless service, so an iteration costs far more than its pause.
               limit={{ add (mul (div (int .Values.sentinel.downAfterMilliseconds) 1000) 2) 10 }}
-              waited=0
+              SECONDS=0
               until master_ip=$(discover_master); do
                 if [[ "$(sentinel_master)" == "$POD_IP" ]]; then
                   master_ip=$POD_IP
                   break
                 fi
-                if (( waited >= limit )); then
-                  echo "No reachable master after ${limit}s: starting as master"
+                if (( SECONDS >= limit )); then
+                  echo "No reachable master after ${SECONDS}s: starting as master"
                   master_ip=$POD_IP
                   break
                 fi
                 echo "Waiting for a reachable master..."
                 pause 2
-                waited=$((waited + 2))
               done
               if [[ "$master_ip" != "$POD_IP" ]]; then
                 printf 'replicaof %s %s\n' "$master_ip" "$VALKEY_MASTER_PORT" >> "$conf"

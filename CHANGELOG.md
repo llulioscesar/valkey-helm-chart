@@ -1,6 +1,15 @@
 # Changelog
 
 
+## [0.3.2] - 2026-09-12
+
+### Fixed
+- The bounded wait for a reachable master now measures wall clock instead of counting pauses, in both the master and the replica startup loops. Each iteration also runs `discover_master` and `sentinel_master`, each with its own connect timeouts and a scan of the headless service, so an iteration costs several times its two-second pause: the counter reached 30 while the clock was at 97 seconds, and a 70-second limit would not have fired for about four minutes. Both loops now set `SECONDS=0` and compare against it, so the limit means what it says.
+
+### Why
+Observed in production on the 0.3.0 → 0.3.1 upgrade. The deployment was left with every pod replicating an address that no longer existed, the replica sat in `Waiting for a reachable master...` past its limit, and it had to be resolved by hand. The bounded wait introduced in 0.3.1 was correct in shape and wrong in its unit; the master loop had carried the same flaw since the limit was introduced.
+
+
 ## [0.3.1] - 2026-09-12
 
 ### Fixed
