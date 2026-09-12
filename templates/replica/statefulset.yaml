@@ -23,7 +23,10 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "valkey.replica.labels" . | nindent 8 }}
+        {{- /* Stable labels only. The full set carries helm.sh/chart and
+               app.kubernetes.io/version, so a chart version bump alone would
+               change the pod template and restart every pod for nothing. */}}
+        {{- include "valkey.replica.selectorLabels" . | nindent 8 }}
       annotations:
         {{- if (include "valkey.createConfigmap" .) }}
         checksum/configmap: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
@@ -109,13 +112,26 @@ spec:
               {{- if (include "valkey.auth.enabled" .) }}
               printf 'requirepass %s\nmasterauth %s\n' "$VALKEY_PASSWORD" "$VALKEY_PASSWORD" >> "$conf"
               {{- end }}
+              # Bounded wait, as the master pod already does. If the sentinels
+              # keep reporting a master nobody can reach -- every pod replicating
+              # an address that no longer exists -- waiting forever deadlocks the
+              # whole deployment. Starting as master instead gives the sentinels a
+              # live candidate to converge on.
+              limit={{ add (mul (div (int .Values.sentinel.downAfterMilliseconds) 1000) 2) 10 }}
+              waited=0
               until master_ip=$(discover_master); do
                 if [[ "$(sentinel_master)" == "$POD_IP" ]]; then
                   master_ip=$POD_IP
                   break
                 fi
+                if (( waited >= limit )); then
+                  echo "No reachable master after ${limit}s: starting as master"
+                  master_ip=$POD_IP
+                  break
+                fi
                 echo "Waiting for a reachable master..."
                 pause 2
+                waited=$((waited + 2))
               done
               if [[ "$master_ip" != "$POD_IP" ]]; then
                 printf 'replicaof %s %s\n' "$master_ip" "$VALKEY_MASTER_PORT" >> "$conf"

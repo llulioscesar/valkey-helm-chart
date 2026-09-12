@@ -23,7 +23,10 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "valkey.sentinel.labels" . | nindent 8 }}
+        {{- /* Stable labels only: see the note in replica/statefulset.yaml.
+               Restarting the sentinels on a version bump is how an upgrade
+               ends up with no master. */}}
+        {{- include "valkey.sentinel.selectorLabels" . | nindent 8 }}
       annotations:
         {{- if (include "valkey.createConfigmap" .) }}
         checksum/configmap: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}

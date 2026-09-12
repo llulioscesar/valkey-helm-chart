@@ -1,6 +1,16 @@
 # Changelog
 
 
+## [0.3.1] - 2026-09-12
+
+### Fixed
+- A chart version bump no longer restarts any pod. The replica and sentinel pod templates carried the full label set, which includes `helm.sh/chart` and `app.kubernetes.io/version`, and both ConfigMaps did too — the StatefulSets hash those rendered files into `checksum/configmap` and `checksum/health`, so the hash changed on every release even when the configuration was byte-identical. All four now use the stable selector labels. The checksums still change whenever the configuration actually changes, which is what they are for. Pods now restart only when the image or the configuration changes.
+- A replica no longer waits forever for a master. Its startup loop asks the sentinels for the master and retried indefinitely, so when every pod was replicating an address that no longer existed — sentinels included — nothing could break the tie and the deployment stayed with no master until someone promoted a pod by hand. It now gives up after `2 × sentinel.downAfterMilliseconds + 10s` and starts as master, the same bounded wait the master pod already had, giving the sentinels a live candidate to converge on.
+
+### Why this matters together with 0.3.0
+0.3.0 stopped upgrades from *failing*. This release stops them from *restarting everything at once*: with the master, both replicas and all three sentinels rolling simultaneously, the sentinels could promote a replica that was itself about to restart, and the deployment ended up with no master. Observed in production on the 0.2.10 → 0.3.0 upgrade.
+
+
 ## [0.3.0] - 2026-09-12
 
 ### Fixed
