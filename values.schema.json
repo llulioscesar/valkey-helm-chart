@@ -601,6 +601,11 @@
       "type": "object",
       "description": "Pre-upgrade hook configuration",
       "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Run the pre-upgrade hook that deletes the StatefulSets with --cascade=orphan so Helm recreates them. Only needed when a release changes an immutable StatefulSet field",
+          "default": false
+        },
         "image": {
           "type": "object",
           "description": "Hook image configuration",

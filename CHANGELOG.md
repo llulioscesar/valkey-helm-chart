@@ -1,6 +1,18 @@
 # Changelog
 
 
+## [0.3.0] - 2026-09-12
+
+### Fixed
+- `volumeClaimTemplates` now use the stable selector labels (`app.kubernetes.io/name`, `/instance`, `/component`) instead of the full label set. The full set includes `helm.sh/chart` and `app.kubernetes.io/version`, which change with every release, and `volumeClaimTemplates` is immutable: every upgrade therefore failed with `Forbidden: updates to statefulset spec` unless the StatefulSets were deleted and recreated first. Nothing immutable changes between releases from now on.
+
+### Changed
+- The pre-upgrade hook is disabled by default (`preUpgradeHook.enabled: false`). It deleted the master, replica and sentinel StatefulSets with `--cascade=orphan` on every upgrade so Helm would recreate them, which is only needed when an immutable StatefulSet field changes — the problem fixed above. It is also harmful in sentinel mode: deleting all three at once restarts the sentinels together with the data pods, and the sentinels can promote a replica that is itself about to restart, leaving the deployment with no master. The sentinel StatefulSet has no `volumeClaimTemplates` and never needed recreating at all. With the hook enabled, an upgrade also depends on pulling `cgr.dev/chainguard/kubectl:latest` and stays in `pending-upgrade` when that pull fails.
+
+### Upgrading from 0.2.10 or earlier
+This release changes `volumeClaimTemplates`, so it is the **last** upgrade that touches an immutable field. Run it once with `--set preUpgradeHook.enabled=true`, or delete the StatefulSets yourself with `--cascade=orphan`. In sentinel mode, delete `-master` and `-replica` one at a time and **leave `-sentinel` running**. Existing PVCs keep their old labels; that is cosmetic and needs no action.
+
+
 ## [0.2.10] - 2026-09-11
 
 ### Fixed

@@ -580,9 +580,19 @@ metrics:
     annotations: {}
     rules: []
 
-# Pre-upgrade hook configuration
-# Uses Chainguard kubectl image (zero CVE, distroless)
+# Pre-upgrade hook: deletes the StatefulSets with --cascade=orphan so Helm recreates them.
+# Only needed when a new chart version changes a StatefulSet field Kubernetes does not allow
+# to update in place (serviceName, selector, volumeClaimTemplates, podManagementPolicy);
+# otherwise the upgrade fails with "Forbidden: updates to statefulset spec".
+# volumeClaimTemplates used to carry the helm.sh/chart and app.kubernetes.io/version labels,
+# so every version bump changed an immutable field and every upgrade needed this hook. They
+# now use the stable selector labels, so nothing immutable changes between versions and the
+# hook is disabled by default. That matters beyond convenience: the hook deletes all three
+# StatefulSets at once, restarting the sentinels together with the data pods, and an upgrade
+# can end with no master at all. When enabled, the upgrade also depends on pulling the hook
+# image and stays in pending-upgrade if it cannot.
 preUpgradeHook:
+  enabled: false
   image:
     registry: cgr.dev
     repository: chainguard/kubectl

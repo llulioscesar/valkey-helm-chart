@@ -344,7 +344,8 @@ spec:
     - metadata:
         name: valkey-data
         labels:
-          {{- include "valkey.replica.labels" . | nindent 10 }}
+          {{- /* Stable labels only: see the note in master/application.yaml. */}}
+          {{- include "valkey.replica.selectorLabels" . | nindent 10 }}
         {{- if .Values.replica.persistence.annotations }}
         annotations: {{- toYaml .Values.replica.persistence.annotations | nindent 10 }}
         {{- end }}

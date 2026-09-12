@@ -299,7 +299,12 @@ spec:
     - metadata:
         name: valkey-data
         labels:
-          {{- include "valkey.master.labels" . | nindent 10 }}
+          {{- /* volumeClaimTemplates is immutable: any change to it makes every
+                 helm upgrade fail. Full labels carry helm.sh/chart and
+                 app.kubernetes.io/version, which change on every version bump.
+                 Selector labels are stable, so upgrades stop needing the
+                 StatefulSet delete/recreate hook. */}}
+          {{- include "valkey.master.selectorLabels" . | nindent 10 }}
         {{- if eq .Values.architecture "sentinel" }}
         {{- with .Values.master.persistence.annotations }}
         annotations:
