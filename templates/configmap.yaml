@@ -5,7 +5,11 @@ metadata:
   name: {{ include "valkey.fullname" . }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
-    {{- include "valkey.labels" . | nindent 4 }}
+    {{- /* Stable labels only. The StatefulSets hash this whole rendered file
+           into checksum/configmap; with the chart version in here, that hash
+           changed on every release and restarted every pod even when the
+           configuration was identical. */}}
+    {{- include "valkey.selectorLabels" . | nindent 4 }}
   {{- with (include "valkey.annotations" .) }}
   annotations:
     {{- . | nindent 4 }}

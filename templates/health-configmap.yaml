@@ -5,7 +5,9 @@ metadata:
   name: {{ printf "%s-health" (include "valkey.fullname" .) }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
-    {{- include "valkey.labels" . | nindent 4 }}
+    {{- /* Stable labels only: see the note in configmap.yaml. This file is
+           hashed into checksum/health. */}}
+    {{- include "valkey.selectorLabels" . | nindent 4 }}
   {{- with .Values.commonAnnotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
