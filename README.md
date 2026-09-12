@@ -351,10 +351,16 @@ networkPolicy:
 
 ## Connecting to Valkey
 
+> The throwaway client pods below use the official Docker Hub image, **not the
+> image this chart deploys**. They exist only to get a `valkey-cli` you can point
+> at the release, and a pinned tag makes them reproducible — which the chart's
+> own `cgr.dev/chainguard/valkey:latest` default cannot offer on the free tier.
+> Nothing here changes what the chart runs.
+
 ### From Inside the Cluster
 
 ```bash
-# Temporary pod for testing
+# Temporary pod for testing (client only, unrelated to the deployed image)
 kubectl run valkey-client --rm -it \
   --image=valkey/valkey:9.1.2 \
   -- valkey-cli -h my-valkey
