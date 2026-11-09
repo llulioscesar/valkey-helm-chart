@@ -1,6 +1,13 @@
 # Changelog
 
 
+## [0.3.3] - 2026-11-09
+
+### Changed
+- Updated Valkey from 9.1.2 to 9.1.3 (from Chainguard latest image)
+- Updated redis-exporter from v1.91.1 to v1.97.0
+
+
 ## [0.3.2] - 2026-09-12
 
 ### Fixed
